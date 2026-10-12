@@ -1,0 +1,27 @@
+# jobhunter — развёртывание «из коробки» (ТЗ §3, §8).
+#
+#   cp .env.example .env          # или использовать ../.env как есть
+#   docker compose up -d --build
+#
+# Секреты берутся из ../.env (он лежит рядом с репозиторием), БД — в ./data.
+services:
+  jobhunter:
+    build: .
+    image: jobhunter:0.1.0
+    container_name: jobhunter
+    env_file:
+      - ../.env
+    environment:
+      TZ: Europe/Moscow
+      # внутри контейнера БД и бэкапы лежат в примонтированном томе
+      DB_PATH: data/jobhunter.db
+      BACKUP_DIR: data/backups
+    volumes:
+      - ./data:/app/data
+    # 8080/8081/8082 на хосте уже заняты другими сервисами,
+    # наружу отдаём 8090 (переопределяется через HEALTHZ_HOST_PORT)
+    ports:
+      - "${HEALTHZ_HOST_PORT:-8090}:8080"
+    restart: unless-stopped
+    labels:
+      com.jobhunter.description: "Vacancy hunter + interactive Telegram bot"
