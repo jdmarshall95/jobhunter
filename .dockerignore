@@ -1,0 +1,16 @@
+# Контекст сборки держим минимальным: код + конфигы + промпты.
+.git/
+.gitignore
+.venv/
+data/
+tests/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.env
+.env.example
+README.md
+docker-compose.yml
+Dockerfile

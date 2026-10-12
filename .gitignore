@@ -1,0 +1,22 @@
+# секреты — никогда в репозиторий (ТЗ §2)
+.env
+.env.local
+
+# Telethon-сессии
+*.session
+*.session-journal
+
+# база, бэкапы, кэш HTTP
+data/
+
+# python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+.test_monitor
