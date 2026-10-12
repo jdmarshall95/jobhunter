@@ -10,8 +10,8 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import Any
 
 from aiogram import F, Router
@@ -48,6 +48,7 @@ from app.logging_setup import get_logger
 from app.models import REJECT_REASONS, STATUS_ORDER
 from app.pipeline.runner import Pipeline
 from app.storage import Database
+from app.timeutil import now_in
 
 log = get_logger(__name__)
 
@@ -55,6 +56,9 @@ KV_PAUSED = "paused"
 KV_CHANNELS = "channels"
 #: how many new cards a single pipeline run may push
 MAX_NOTIFY_PER_RUN = 10
+#: ``/top`` accepts ``/top 20``, ``/top_20``, ``/top-20``, ``/top20`` — but not
+#: ``/totally-unknown``, so the tail must not continue with letters.
+TOP_PATTERN = re.compile(r"^top(?![a-z])")
 
 
 class RejectStates(StatesGroup):
@@ -221,7 +225,7 @@ def build_router(ctx: BotCtx) -> Router:
         new_count = await ctx.db.count_jobs(since_days=1)
         text = render_digest(
             [job_view(r) for r in rows],
-            date_text=datetime.now(tz=UTC).strftime("%d.%m"),
+            date_text=now_in(ctx.settings.timezone).strftime("%d.%m"),
             new_count=new_count,
         )
         await message.answer(text)
@@ -235,9 +239,9 @@ def build_router(ctx: BotCtx) -> Router:
         await message.answer(render_list([job_view(r) for r in rows], "Новое", page=1, pages=1))
         await ctx.db.mark_notified([str(r["id"]) for r in rows])
 
-    @router.message(Command("top"))
+    @router.message(Command(TOP_PATTERN))
     async def cmd_top(message: Message, command: CommandObject) -> None:
-        limit = _int_arg(command.args, 10)
+        limit = _int_arg(_top_argument(command), 10)
         rows = await top_rows(ctx.db, limit=limit, since_days=30, include_suspicious=None)
         await message.answer(render_list([job_view(r) for r in rows], f"Топ-{limit} за 30 дней"))
 
@@ -307,7 +311,7 @@ def build_router(ctx: BotCtx) -> Router:
     @router.message(Command("sources"))
     async def cmd_sources(message: Message) -> None:
         rows = await ctx.db.source_health_all()
-        await message.answer(render_sources(rows))
+        await message.answer(render_sources(rows, tz_name=ctx.settings.timezone))
 
     @router.message(Command("filters"))
     async def cmd_filters(message: Message) -> None:
@@ -386,7 +390,7 @@ def build_router(ctx: BotCtx) -> Router:
                 ]
             )
         payload = buf.getvalue().encode("utf-8-sig")  # BOM: Excel opens UTF-8 correctly
-        filename = f"jobs_{datetime.now(tz=UTC):%Y%m%d}.csv"
+        filename = f"jobs_{now_in(ctx.settings.timezone):%Y%m%d}.csv"
         if ctx.api is not None:
             await ctx.api.send_document(
                 chat_id=message.chat.id,
@@ -516,6 +520,19 @@ def _int_arg(value: str | None, default: int) -> int:
         return max(1, int((value or "").strip()))
     except ValueError:
         return default
+
+
+def _top_argument(command: CommandObject | None) -> str | None:
+    """Pull the ``N`` out of ``/top 20`` as well as out of ``/top_20``.
+
+    aiogram tokenises ``/top_20`` as a command named ``top_20`` (the digits are
+    part of the command, not ``args``), so the number has to be scraped from the
+    command name first and only then read from ``args``.
+    """
+    if command is None:
+        return None
+    digits = re.sub(r"\D", "", command.command or "")
+    return digits or (command.args or None)
 
 
 def _funnel_query(name: str) -> tuple[list[str] | None, str]:

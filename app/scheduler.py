@@ -15,7 +15,7 @@ bad run cannot kill the loop (ТЗ §8 «устойчивость»).
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -27,6 +27,7 @@ from app.bot.render import esc, job_view, render_digest, render_stats
 from app.config import Settings
 from app.logging_setup import get_logger
 from app.pipeline.runner import RunSummary
+from app.timeutil import now_in
 
 log = get_logger(__name__)
 
@@ -138,7 +139,8 @@ class Scheduler:
         new_count = await self.ctx.db.count_jobs(since_days=1)
         text = render_digest(
             [job_view(r) for r in rows],
-            date_text=datetime.now(tz=UTC).strftime("%d.%m"),
+            # the digest fires at DIGEST_TIME local, so its date must be local too
+            date_text=now_in(self.settings.timezone).strftime("%d.%m"),
             new_count=new_count,
         )
         self.ctx.sender.send(self._chat(), text)

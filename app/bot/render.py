@@ -12,6 +12,7 @@ from html import escape
 from typing import Any
 
 from app.models import Job
+from app.timeutil import to_local
 
 #: Telegram hard limit for a text message.
 TG_LIMIT = 4096
@@ -266,8 +267,12 @@ def render_stats(
     return "\n".join(lines)
 
 
-def render_sources(rows: list[Any]) -> str:
-    """Renders :class:`app.storage.db.SourceHealth` records (ТЗ §7 ``/sources``)."""
+def render_sources(rows: list[Any], *, tz_name: str | None = None) -> str:
+    """Renders :class:`app.storage.db.SourceHealth` records (ТЗ §7 ``/sources``).
+
+    Timestamps are stored in UTC and shown in ``tz_name`` so the bot does not
+    contradict the scheduler's clock.
+    """
     if not rows:
         return "🧭 <b>Источники</b>\nни один ещё не отработал"
     lines = ["🧭 <b>Источники</b>", ""]
@@ -277,7 +282,7 @@ def render_sources(rows: list[Any]) -> str:
         runs = int(_get(row, "runs", 0) or 0)
         found = int(_get(row, "jobs_found", 0) or 0)
         errors = int(_get(row, "consecutive_errors", 0) or 0)
-        last = str(_get(row, "last_ok_at", "") or "—")[:16].replace("T", " ")
+        last = to_local(_get(row, "last_ok_at", ""), tz_name)
         mark = "✅" if ok else "❌"
         line = f"{mark} {esc(name)} · запусков {runs} · найдено {found} · последняя {last}"
         if errors:

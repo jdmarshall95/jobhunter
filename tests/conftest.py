@@ -13,7 +13,9 @@ from typing import Any
 
 import pytest
 from aiogram import Bot, Dispatcher
+from aiogram.client.default import DefaultBotProperties
 from aiogram.client.session.base import BaseSession
+from aiogram.enums import ParseMode
 from aiogram.types import Chat, Message, Update
 from aiogram.types.message import ContentType
 
@@ -343,7 +345,15 @@ def build_harness(
     from app.bot.handlers import BotCtx, build_router
 
     session = FakeSession()
-    bot = Bot(token="1234:TEST", session=session)
+    # same defaults as production (``App.start_bot``): HTML everywhere
+    bot = Bot(
+        token="1234:TEST",
+        session=session,
+        default=DefaultBotProperties(
+            parse_mode=ParseMode.HTML,
+            link_preview_is_disabled=True,
+        ),
+    )
     ctx = BotCtx(
         settings=settings,
         profile=profile,

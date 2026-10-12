@@ -88,8 +88,18 @@ class App:
 
     async def start_bot(self) -> None:
         from aiogram import Bot, Dispatcher
+        from aiogram.client.default import DefaultBotProperties
+        from aiogram.enums import ParseMode
 
-        bot = Bot(token=self.settings.telegram_bot_token)
+        # HTML everywhere: without a default parse_mode every ``message.answer``
+        # would show the raw tags (``<b>Дайджест</b>``) to the user.
+        bot = Bot(
+            token=self.settings.telegram_bot_token,
+            default=DefaultBotProperties(
+                parse_mode=ParseMode.HTML,
+                link_preview_is_disabled=True,
+            ),
+        )
         dp = Dispatcher()
         dp.include_router(build_router(self.ctx))
         self.bot = bot

@@ -8,6 +8,7 @@ are exercised for real — no live connection needed.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import pytest
@@ -64,6 +65,12 @@ class TestStaticCommands:
         await harness.command("/totally-unknown")
         assert harness.session.calls == []
 
+    async def test_messages_are_sent_as_html(self, harness_factory: Any) -> None:
+        """Without a default parse_mode the client prints ``<b>`` literally."""
+        harness = harness_factory()
+        assert harness.bot.default.parse_mode == "HTML"
+        assert harness.bot.default.link_preview_is_disabled is True
+
 
 class TestDigestAndLists:
     async def test_digest_shows_today(self, harness_factory: Any, db: Database) -> None:
@@ -108,6 +115,25 @@ class TestDigestAndLists:
         assert "Топ-2 за 30 дней" in harness.texts[0]
         # header + exactly two rows
         assert len(harness.texts[0].strip().split("\n")) == 3
+
+    @pytest.mark.parametrize("text", ["/top_2", "/top-2", "/top2"])
+    async def test_top_accepts_the_joined_argument(
+        self, harness_factory: Any, db: Database, text: str
+    ) -> None:
+        """Telegram autolinks ``/top_20``: aiogram puts the digits in the name."""
+        for i in range(3):
+            await seed(db, company=f"Co{i}", title=f"DevOps {i}", url=f"https://t.io/{i}")
+        harness = harness_factory()
+        await harness.command(text)
+        assert "Топ-2 за 30 дней" in harness.texts[0]
+
+    async def test_top_without_argument_defaults_to_ten(
+        self, harness_factory: Any, db: Database
+    ) -> None:
+        await seed(db)
+        harness = harness_factory()
+        await harness.command("/top")
+        assert "Топ-10 за 30 дней" in harness.texts[0]
 
     async def test_suspicious_lists_only_scam_flags(
         self, harness_factory: Any, db: Database
@@ -270,6 +296,17 @@ class TestAnalytics:
         assert "✅ gh" in text
         assert "❌ lever" in text
         assert "подряд ошибок 1" in text
+
+    async def test_sources_timestamp_is_local_not_utc(
+        self, harness_factory: Any, db: Database
+    ) -> None:
+        """Storage keeps UTC ISO; the owner must see ``dd.mm HH:MM`` in MSK."""
+        await db.record_source_ok("gh", 12)
+        harness = harness_factory()
+        await harness.command("/sources")
+        text = harness.texts[0]
+        assert "последняя 2026-" not in text
+        assert re.search(r"последняя \d{2}\.\d{2} \d{2}:\d{2}", text)
 
     async def test_export_sends_a_csv_document(
         self, harness_factory: Any, db: Database
