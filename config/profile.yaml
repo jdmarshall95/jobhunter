@@ -1,0 +1,142 @@
+# Профиль кандидата и правила отбора. Правится без переписывания кода.
+# Структура описана в app/config.py (Profile -> Candidate / Filters / ScoringWeights).
+
+candidate:
+  name: Ivan
+  languages: [ru, en]
+  target_roles:
+    - DevOps
+    - SRE
+    - Platform Engineer
+    - Infrastructure Engineer
+    - MLOps
+  seniority: [middle, senior, lead]
+  work_mode: remote
+  salary_expectation_usd_month:
+    # Цифры — «на руки» (net). В карточке и разборе показываем ещё gross и годовые.
+    min: 3000
+    target: 4000
+    net: true
+    # Усреднённая налоговая нагрузка для пересчёта net <-> gross.
+    tax_rate: 0.13
+  stack_core:
+    - Kubernetes
+    - Terraform
+    - Ansible
+    - Vault
+    - Prometheus
+    - Grafana
+    - Linux
+    - Docker
+    - Helm
+    - GitLab CI
+    - Jenkins
+    - SaltStack
+    - AWS
+    - PostgreSQL
+    - Redis
+    - Python
+    - Go
+    - Bash
+  stack_plus:
+    - Loki
+    - Keycloak
+    - WireGuard
+    - Envoy
+    - Consul
+    - OpenStack
+    - Proxmox
+    - KVM
+    - MinIO
+    - S3
+    - GPU
+    - bare-metal
+  domains_priority:
+    - crypto
+    - web3
+    - blockchain
+    - exchange
+    - wallet
+    - staking
+    - validator
+    - node
+    - DeFi
+    - fintech
+    - payments
+  want_russian_speaking_team: true
+
+  # Только проверенные факты из резюме: LLM разрешено использовать их как есть,
+  # выдумывать опыт запрещено (см. prompts/draft.md).
+  facts:
+    - "200+ серверов под управлением: ручной труд сокращён примерно на 70%"
+    - "Экономия ~€60K в год на оптимизации кэширования"
+    - "Инциденты: с 2–3 в месяц до 0–1 после внедрения мониторинга и CI/CD"
+    - "Jenkins-пайплайны: на 90% меньше конфликтов окружений"
+    - "Онбординг нового разработчика: с 1–2 дней до 1 часа"
+    - "Утилизация GPU: с 40% до 80%"
+    - "Стек: Kubernetes, Terraform, Ansible, SaltStack, Prometheus/Grafana, GitLab CI, AWS, PostgreSQL, Redis"
+  headline: "DevOps / SRE Engineer (crypto-ready, remote)"
+  summary: >-
+    Middle/Senior DevOps-инженер с опытом эксплуатации 200+ серверов, Kubernetes,
+    Terraform, Ansible/SaltStack и GitLab CI. Работал с highload-инфраструктурой,
+    мониторингом Prometheus/Grafana и базовыми данными (PostgreSQL, Redis).
+    Ищу удалённую позицию в crypto/web3/fintech с русскоязычной командой.
+
+filters:
+  # Роль ищется сначала в заголовке, затем в начале описания (role_scan_chars).
+  # Список намеренно широкий: ATS-доски называют роль «Manager»/«Specialist»,
+  # а несовпадение теперь только штрафует вакансию (penalty_irrelevant_role).
+  include_keywords:
+    - devops
+    - dev ops
+    - devops engineer
+    - sre
+    - site reliability
+    - platform engineer
+    - platform team
+    - infrastructure
+    - infra
+    - system administrator
+    - sysadmin
+    - cloud
+    - mlops
+    - devsecops
+    - reliability
+    - инженер
+  exclude_keywords:
+    - junior
+    - intern
+    - trainee
+    - on-site
+    - onsite
+    - relocation required
+    - frontend
+    - data scientist
+  exclude_companies: []
+  sanctions_blocklist: []
+  # false: несовпадение роли = флаг + штраф, решение за min_score.
+  role_strict: false
+  role_scan_chars: 1200
+
+scoring:
+  stack_core_each: 6.0
+  stack_core_cap: 36.0
+  stack_plus_each: 2.5
+  stack_plus_cap: 12.0
+  domain_match: 14.0
+  seniority_match: 12.0
+  salary_at_or_above_target: 14.0
+  salary_between_min_and_target: 9.0
+  salary_below_min: -18.0
+  salary_unknown: 4.0
+  russian_speaking_signal: 8.0
+  penalty_onsite: -25.0
+  penalty_irrelevant_role: -20.0
+  penalty_residency: -6.0
+  penalty_scam_suspect: -10.0
+  geo_restricted: -4.0
+
+# Порог «интересно» для дайджеста и LLM-перескоринга.
+min_score: 40
+# Порог мгновенного алерта (раздел 7 ТЗ).
+alert_score: 85
