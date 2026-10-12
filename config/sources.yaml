@@ -1,0 +1,136 @@
+# Источники вакансий. Каждый пункт = плагин из app/sources (см. REGISTRY).
+# enabled: false — источник собран, но выключен (не подтверждён / деградировал).
+#
+# ВАЖНО: токены проверены живыми запросами (Этап 0). Ничего не угадано:
+#   Greenhouse  -> HTTP 200: fireblocks, okx, whitebit, figment, bybit, coinbase,
+#                          gemini, bitpanda
+#   Ashby       -> HTTP 200: blockdaemon, coinbase
+#   Lever       -> HTTP 404 на всех проверенных крипто-слагах -> выключен
+#   RemoteOK    -> HTTP 200
+#   WWR RSS     -> HTTP 200
+#   hh.ru       -> HTTP 403 с этого IP при любом User-Agent -> деградирован
+
+sources:
+  # --- 1. ATS: Greenhouse -------------------------------------------------
+  - name: greenhouse_bybit
+    kind: greenhouse
+    enabled: true
+    token: bybit
+    company: Bybit
+  - name: greenhouse_okx
+    kind: greenhouse
+    enabled: true
+    token: okx
+    company: OKX
+  - name: greenhouse_fireblocks
+    kind: greenhouse
+    enabled: true
+    token: fireblocks
+    company: Fireblocks
+  - name: greenhouse_coinbase
+    kind: greenhouse
+    enabled: true
+    token: coinbase
+    company: Coinbase
+  - name: greenhouse_gemini
+    kind: greenhouse
+    enabled: true
+    token: gemini
+    company: Gemini
+  - name: greenhouse_bitpanda
+    kind: greenhouse
+    enabled: true
+    token: bitpanda
+    company: Bitpanda
+  - name: greenhouse_whitebit
+    kind: greenhouse
+    enabled: true
+    token: whitebit
+    company: WhiteBIT
+  - name: greenhouse_figment
+    kind: greenhouse
+    enabled: true
+    token: figment
+    company: Figment
+
+  # --- 1. ATS: Ashby ------------------------------------------------------
+  - name: ashby_blockdaemon
+    kind: ashby
+    enabled: true
+    token: blockdaemon
+    company: Blockdaemon
+  - name: ashby_coinbase
+    kind: ashby
+    enabled: false
+    token: coinbase
+    company: Coinbase
+    note: "Coinbase отдаёт и Greenhouse, и Ashby; оставлен выключенным, чтобы не дублировать"
+
+  # --- 1. ATS: Lever (не подтверждён ни один крипто-слаг) -----------------
+  - name: lever_sandbox
+    kind: lever
+    enabled: false
+    token: "web3"
+    company: Web3
+    note: "все проверенные крипто-слага вернули 404; включить после подтверждения слага"
+
+  # --- 2/3. Агрегаторы и удалённые доски ---------------------------------
+  - name: remoteok
+    kind: remoteok
+    enabled: true
+    note: "remoteok.com/api; элемент 0 ответа — служебная строка, парсер её пропускает"
+
+  - name: wwr_rss
+    kind: wwr_rss
+    enabled: true
+    queries:
+      - devops
+      - sre
+      - platform
+      - infrastructure
+      - reliability
+
+  # --- 5. Хабр Карьера (RSS; JSON-API отдаёт 401 без сессии) --------------
+  - name: habr
+    kind: habr
+    enabled: true
+    url: "https://career.habr.com/vacancies/rss"
+    queries:
+      - devops
+      - sre
+      - "site reliability"
+      - platform
+      - infrastructure
+      - "системный администратор"
+      - sysadmin
+      - linux
+      - devsecops
+      - mlops
+    note: "50 объявлений на страницу RSS; зарплата «от X ₽ до Y ₽» парсится в RUB"
+
+  # --- 6. Telegram-каналы (публичное превью t.me/s, Telethon не нужен) ----
+  - name: telegram
+    kind: telegram
+    enabled: true
+    queries:
+      - devops_vacancies
+      - habr_career
+      - getjob
+    note: "список каналов расширяется из бота: /addchannel <имя>; пустые каналы не валят плагин"
+
+  # --- 4. hh.ru (403 с текущего IP — оставлен выключенным) ---------------
+  - name: hh
+    kind: hh
+    enabled: false
+    queries:
+      - DevOps
+      - SRE
+      - "Site Reliability Engineer"
+      - "Platform Engineer"
+    note: "api.hh.ru отдаёт 403 с этого IP; включить после смены IP/резидентного прокси"
+
+# Telegram-каналы, добавленные из бота (дублируют kv «channels»).
+telegram_channels:
+  - devops_vacancies
+  - habr_career
+  - getjob
