@@ -614,7 +614,9 @@ class TestFetchHappyPath:
         cfg = SourceConfig(
             name="unit", kind="telegram", queries=["devops_vacancies", "dead_channel"]
         )
-        jobs = await REGISTRY["telegram"](cfg, make_fetcher(handler)).fetch()
+        src = REGISTRY["telegram"](cfg, make_fetcher(handler))
+        src.pages = 1  # unit: one preview page; pagination covered separately
+        jobs = await src.fetch()
 
         assert seen == ["https://t.me/s/devops_vacancies", "https://t.me/s/dead_channel"]
         assert len(jobs) == 2  # a dead channel does not void the healthy one
@@ -628,9 +630,39 @@ class TestFetchHappyPath:
             return httpx.Response(200, text=TG_HTML)
 
         cfg = SourceConfig(name="unit", kind="telegram")
-        await REGISTRY["telegram"](cfg, make_fetcher(handler)).fetch()
+        src = REGISTRY["telegram"](cfg, make_fetcher(handler))
+        src.pages = 1
+        await src.fetch()
 
         assert seen == [f"https://t.me/s/{name}" for name in DEFAULT_CHANNELS]
+
+    async def test_telegram_paginates_with_before(self) -> None:
+        seen: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen.append(str(request.url))
+            url = str(request.url)
+            if "before=" in url:
+                # Older page: different post ids so the walker keeps going once.
+                html = TG_HTML.replace("devops_vacancies/42", "devops_vacancies/10").replace(
+                    "devops_vacancies/43", "devops_vacancies/11"
+                )
+                return httpx.Response(200, text=html)
+            return httpx.Response(200, text=TG_HTML)
+
+        cfg = SourceConfig(name="unit", kind="telegram", queries=["devops_vacancies"])
+        src = REGISTRY["telegram"](cfg, make_fetcher(handler))
+        src.pages = 2
+        jobs = await src.fetch()
+
+        assert seen[0] == "https://t.me/s/devops_vacancies"
+        assert seen[1] == "https://t.me/s/devops_vacancies?before=42"
+        assert {j.raw["post"] for j in jobs} == {
+            "devops_vacancies/42",
+            "devops_vacancies/43",
+            "devops_vacancies/10",
+            "devops_vacancies/11",
+        }
 
 
 class TestFetchRequests:
@@ -740,8 +772,11 @@ class TestFetchFailures:
         src = REGISTRY["telegram"](
             cfg, make_fetcher(lambda request: httpx.Response(200, text="<html/>"))
         )
+        src.pages = 1
 
-        with pytest.raises(SourceError, match=r"unit: telegram feed empty: no messages"):
+        with pytest.raises(
+            SourceError, match=r"unit: telegram feed empty: @devops_ru \(http 200\)"
+        ):
             await src.fetch()
 
     async def test_telegram_all_channels_down_raises(self) -> None:

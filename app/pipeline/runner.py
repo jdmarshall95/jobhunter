@@ -172,7 +172,12 @@ class Pipeline:
         negative = await self.db.company_reject_tally()
         blocklist = await self._blocklist()
 
-        accepted: list[Job] = []
+        # Persist every vacancy that survives hard filters — even below
+        # ``min_score``. Otherwise the web UI / channel feeds look empty while
+        # suitable Luna Park posts quietly disappear (score often 0–30 when the
+        # title is not literally «DevOps»). ``min_score`` only gates digests,
+        # Telegram alerts and LLM re-score.
+        saved: list[Job] = []
         for job in jobs:
             outcome = apply_hard_filters(
                 job, self.profile, extra_stopwords=stopwords, blocklist=blocklist
@@ -189,30 +194,31 @@ class Pipeline:
             for note in outcome.flags:
                 if note not in job.flags:
                     job.flags.append(note)
-            if job.score < self.profile.min_score:
-                summary.filtered += 1
-                continue
-            accepted.append(job)
+            saved.append(job)
+
+        qualified = [j for j in saved if j.score >= self.profile.min_score]
 
         want_llm = self.llm.enabled if use_llm is None else use_llm
         if want_llm:
-            for job in accepted:
+            for job in qualified:
                 result = await self.llm.rescore(job, self.profile)
                 if result is not None:
                     summary.llm_calls += 1
 
-        for job in accepted:
+        for job in saved:
+            qualifies = job.score >= self.profile.min_score
             if dry_run:
-                summary.new_ids.append(job.id)
+                if qualifies:
+                    summary.new_ids.append(job.id)
                 continue
             _, is_new = await self.db.upsert_job(job)
-            if is_new:
+            if is_new and qualifies:
                 summary.new_ids.append(job.id)
                 await self.db.log_event(job.id, "new", json.dumps({"sources": job.sources}))
             if job.score >= self.profile.alert_score:
                 summary.alerts.append(job.id)
 
-        summary.accepted = len(accepted)
+        summary.accepted = len(saved)
         summary.seconds = time.monotonic() - started
         log.info("run finished: %s", summary.as_text())
         return summary

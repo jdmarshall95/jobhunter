@@ -17,6 +17,9 @@ Telethon подключается только когда есть ``TG_API_ID``
 
 Каналы вроде ``hrlunapark`` (Luna Park) пишут посты в формате
 ``tl;dr: role, $XXk–YYk, remote`` + компания в первой строке тела.
+
+Превью ``t.me/s`` отдаёт ~20 последних постов; более старые добираются
+пагинацией ``?before=<msg_id>`` (без Telethon).
 """
 
 from __future__ import annotations
@@ -30,9 +33,15 @@ from app.models import RawJob
 from app.sources.base import SourcePlugin
 
 PREVIEW_URL = "https://t.me/s/{channel}"
+PREVIEW_BEFORE_URL = "https://t.me/s/{channel}?before={before}"
 
 #: Каналы по умолчанию: проверены, отдают непустое превью без авторизации.
 DEFAULT_CHANNELS = ("devops_vacancies", "habr_career", "getjob", "hrlunapark")
+
+#: How many preview pages to walk backwards (≈20 posts each).
+DEFAULT_PAGES = 5
+#: Cap per page — the widget rarely shows more than ~20 anyway.
+PAGE_LIMIT = 25
 
 #: «DevOps-инженер» / «Системный инженер/DevOps Engineer (KSS)» — первая строка
 _WS_RE = re.compile(r"[ \t\u00a0]+")
@@ -43,6 +52,9 @@ _COMPANY_LEAD_RE = re.compile(
     r"^([A-Za-zА-Яа-яЁё0-9][\w.&'’-]{0,48}?)\s*[—–\-]\s+\S",
     re.UNICODE,
 )
+_POST_ID_RE = re.compile(r"/(\d+)$")
+
+
 def _clean_lines(text: str) -> list[str]:
     lines = [_WS_RE.sub(" ", line).strip() for line in text.splitlines()]
     return [line for line in lines if line]
@@ -52,7 +64,7 @@ def _title_of(lines: list[str]) -> str:
     """Prefer ``tl;dr: …`` payload; otherwise the first meaningful line."""
     for line in lines:
         m = _TLDR_RE.match(line)
-        if m:
+        if m and m.group(1).strip():
             return m.group(1).strip()[:_TITLE_MAX]
     for line in lines:
         if len(line) < 4:
@@ -78,6 +90,16 @@ def _company_from_body(lines: list[str], *, channel: str, channel_title: str) ->
     if channel.casefold() == "hrlunapark":
         return f"@{channel}"
     return channel_title or f"@{channel}"
+
+
+def _oldest_post_id(jobs: list[RawJob]) -> int | None:
+    ids: list[int] = []
+    for job in jobs:
+        post = str((job.raw or {}).get("post") or "")
+        m = _POST_ID_RE.search(post)
+        if m:
+            ids.append(int(m.group(1)))
+    return min(ids) if ids else None
 
 
 def parse_telegram(
@@ -133,6 +155,7 @@ class TelegramSource(SourcePlugin):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._extra: list[str] = []
+        self.pages = DEFAULT_PAGES
 
     def add_channels(self, names: list[str]) -> None:
         """Merge bot-managed channels (``/addchannel``) into the config list."""
@@ -147,19 +170,55 @@ class TelegramSource(SourcePlugin):
         merged = configured + [c for c in self._extra if c not in configured]
         return merged or list(DEFAULT_CHANNELS)
 
+    async def _fetch_channel(self, channel: str) -> tuple[list[RawJob], str | None]:
+        """Walk ``pages`` of the public preview, oldest-first via ``?before=``."""
+        jobs: list[RawJob] = []
+        seen: set[str] = set()
+        url = PREVIEW_URL.format(channel=channel)
+        last_status: int | None = None
+        for _ in range(max(1, self.pages)):
+            body, status = await self.http.get_text(url)
+            last_status = status
+            if body is None:
+                if not jobs:
+                    return [], f"@{channel} (http {status})"
+                break
+            batch = parse_telegram(
+                body, channel=channel, source=self.name, limit=PAGE_LIMIT
+            )
+            fresh = 0
+            for job in batch:
+                post = str((job.raw or {}).get("post") or job.url)
+                if post in seen:
+                    continue
+                seen.add(post)
+                jobs.append(job)
+                fresh += 1
+            oldest = _oldest_post_id(batch)
+            if fresh == 0 or oldest is None:
+                break
+            url = PREVIEW_BEFORE_URL.format(channel=channel, before=oldest)
+        return jobs, None if jobs else f"@{channel} (http {last_status})"
+
     async def fetch(self) -> list[RawJob]:
         jobs: list[RawJob] = []
         errors: list[str] = []
         for channel in self.channels:
-            body, status = await self.http.get_text(PREVIEW_URL.format(channel=channel))
-            if body is None:
-                errors.append(f"@{channel} (http {status})")
-                continue
-            jobs.extend(parse_telegram(body, channel=channel, source=self.name))
+            batch, error = await self._fetch_channel(channel)
+            if error:
+                errors.append(error)
+            jobs.extend(batch)
         if not jobs:
             detail = ", ".join(errors) if errors else "no messages"
             raise self._fail(f"telegram feed empty: {detail}")
         return jobs
 
 
-__all__ = ["TelegramSource", "parse_telegram", "PREVIEW_URL", "DEFAULT_CHANNELS"]
+__all__ = [
+    "TelegramSource",
+    "parse_telegram",
+    "PREVIEW_URL",
+    "PREVIEW_BEFORE_URL",
+    "DEFAULT_CHANNELS",
+    "DEFAULT_PAGES",
+]

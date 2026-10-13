@@ -77,10 +77,29 @@ def apply_hard_filters(
         flags.append("гео-ограничение")
 
     # 3. Exclude keywords (title is decisive, body only for strong tokens).
+    # Luna Park often lists several roles in one tl;dr («AI, frontend, full-stack
+    # and other engineers») — a secondary «frontend» must not kill the whole card
+    # when a platform/infra/devops angle is also present.
+    _MULTI_ROLE_RESCUE = (
+        "devops",
+        "sre",
+        "platform",
+        "infra",
+        "backend",
+        "full-stack",
+        "fullstack",
+        "full stack",
+        "other engineers",
+        "mlops",
+        "reliability",
+    )
     for kw in f.exclude_keywords:
         low = kw.casefold()
         if low in title:
-            reasons.append(f"стоп-слово «{kw}» в заголовке")
+            if low == "frontend" and any(tok in title for tok in _MULTI_ROLE_RESCUE):
+                flags.append("frontend в списке ролей")
+            else:
+                reasons.append(f"стоп-слово «{kw}» в заголовке")
         elif low in ("junior", "intern", "trainee", "data scientist") and low in blob[:200]:
             reasons.append(f"стоп-слово «{kw}»")
 

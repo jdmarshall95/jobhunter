@@ -94,14 +94,19 @@ filters:
     - site reliability
     - platform engineer
     - platform team
+    - platform
     - infrastructure
     - infra
     - system administrator
     - sysadmin
+    - cloud engineer
     - cloud
     - mlops
     - devsecops
     - reliability
+    - production engineer
+    - staff engineer
+    - founding engineer
     - инженер
   exclude_keywords:
     - junior
@@ -110,6 +115,8 @@ filters:
     - on-site
     - onsite
     - relocation required
+    # «frontend» alone — да; в списке ролей Luna Park («AI, frontend, …»)
+    # фильтр больше не дропает всю карточку (см. app/pipeline/filters.py).
     - frontend
     - data scientist
   exclude_companies: []

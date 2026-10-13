@@ -112,6 +112,27 @@ class TestExcludeKeywords:
         assert outcome.passed is False
         assert any("junior" in r for r in outcome.reasons)
 
+    def test_frontend_alone_is_dropped(self, profile: Any) -> None:
+        profile.filters.exclude_keywords = [*profile.filters.exclude_keywords, "frontend"]
+        job = good_job(title="Frontend Engineer", description="React only")
+
+        outcome = apply_hard_filters(job, profile)
+
+        assert outcome.passed is False
+        assert any("frontend" in r for r in outcome.reasons)
+
+    def test_frontend_in_multi_role_lunapark_title_is_kept(self, profile: Any) -> None:
+        profile.filters.exclude_keywords = [*profile.filters.exclude_keywords, "frontend"]
+        job = good_job(
+            title="AI, frontend, full-stack and other engineers. $125k–225k + equity",
+            description="Also looking for platform / infra.",
+        )
+
+        outcome = apply_hard_filters(job, profile)
+
+        assert outcome.passed is True
+        assert "frontend в списке ролей" in outcome.flags
+
     def test_exclude_in_body_head_for_weak_tokens(self, profile: Any) -> None:
         job = good_job(title="DevOps Engineer", description="Level: intern, please apply.")
 

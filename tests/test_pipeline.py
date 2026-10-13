@@ -261,18 +261,21 @@ class TestRunCounters:
         assert await db.count_jobs() == 0
         assert await db.count_events("new", 1) == 0
 
-    async def test_low_score_is_filtered_out(
+    async def test_low_score_is_saved_but_not_notified(
         self, pipeline_factory: Any, db: Database
     ) -> None:
-        # raise the bar so the 68.5 vacancy is scored but then rejected
+        # raise the bar so the ~68 vacancy is saved for the web UI, but skipped
+        # for digests / Telegram «new» alerts (min_score gates notifications only).
         summary = await pipeline_factory(
             stub_source("gh", [good_raw()]), min_score=90.0
         ).run()
 
-        assert summary.accepted == 0
-        assert summary.filtered == 1
+        assert summary.accepted == 1
+        assert summary.filtered == 0
         assert summary.new_ids == []
-        assert await db.count_jobs() == 0
+        assert await db.count_jobs() == 1
+        row = (await db.list_jobs(limit=1))[0]
+        assert float(row["score"]) < 90.0
 
 
 class TestAlerts:
