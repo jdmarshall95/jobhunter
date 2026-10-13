@@ -116,7 +116,8 @@ sources:
       - devops_vacancies
       - habr_career
       - getjob
-    note: "список каналов расширяется из бота: /addchannel <имя>; пустые каналы не валят плагин"
+      - hrlunapark
+    note: "hrlunapark = Luna Park (tl;dr-посты); список расширяется из бота: /addchannel <имя>"
 
   # --- 4. hh.ru (403 с текущего IP — оставлен выключенным) ---------------
   - name: hh
@@ -134,3 +135,4 @@ telegram_channels:
   - devops_vacancies
   - habr_career
   - getjob
+  - hrlunapark

@@ -24,4 +24,4 @@ services:
       - "${HEALTHZ_HOST_PORT:-8090}:8080"
     restart: unless-stopped
     labels:
-      com.jobhunter.description: "Vacancy hunter + interactive Telegram bot"
+      com.jobhunter.description: "Vacancy hunter + Telegram bot + web UI"

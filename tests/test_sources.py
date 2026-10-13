@@ -485,6 +485,43 @@ class TestTelegram:
         assert jobs[0].url == "https://t.me/s/getjob"
         assert jobs[0].company == "@getjob"
 
+    def test_lunapark_tldr_title_and_company(self) -> None:
+        html = (
+            '<div class="tgme_widget_message" data-post="hrlunapark/408">'
+            '<a class="tgme_widget_message_owner_name"><span>Take Friends to Luna Park</span></a>'
+            '<div class="tgme_widget_message_text">'
+            "tl;dr: founding full-stack engineer (early hire), $100k–130k + equity, remote\n"
+            "\n"
+            "Reelful — приложение где AI-агенты монтируют рилсы.\n"
+            "Основательница — Катя Дейнека."
+            "</div>"
+            '<time datetime="2026-10-09T12:00:00+00:00">9 October</time>'
+            "</div>"
+        )
+
+        jobs = parse_telegram(html, channel="hrlunapark", source="tg")
+
+        assert len(jobs) == 1
+        assert jobs[0].title.startswith("founding full-stack engineer")
+        assert jobs[0].company == "Reelful"
+        assert jobs[0].url == "https://t.me/hrlunapark/408"
+        assert jobs[0].raw["channel"] == "hrlunapark"
+
+    def test_lunapark_without_company_dash_uses_channel_handle(self) -> None:
+        html = (
+            '<div class="tgme_widget_message" data-post="hrlunapark/1">'
+            '<a class="tgme_widget_message_owner_name"><span>Take Friends to Luna Park</span></a>'
+            '<div class="tgme_widget_message_text">'
+            "tl;dr: ml engineers, $130k-200k, London\n"
+            "Короткий пост про найм без тире в названии."
+            "</div></div>"
+        )
+
+        jobs = parse_telegram(html, channel="hrlunapark", source="tg")
+
+        assert jobs[0].company == "@hrlunapark"
+        assert "ml engineers" in jobs[0].title
+
 
 class TestTelegramChannels:
     def test_config_and_bot_channels_are_merged(self) -> None:

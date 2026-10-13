@@ -4,11 +4,11 @@ Usage
 -----
     python -m app.main --once          # one pipeline run, then exit
     python -m app.main --dry-run       # run everything but do not write to SQLite
-    python -m app.main                 # bot + scheduler (what Docker runs)
+    python -m app.main                 # bot + scheduler + web UI (what Docker runs)
 
 Responsibilities: load config, connect storage, register secrets with the log
-masker, expose ``/healthz``, start the outgoing queue + scheduler + long polling,
-and shut everything down gracefully on SIGINT/SIGTERM.
+masker, expose the web UI (``/`` + ``/healthz``), start the outgoing queue +
+scheduler + long polling, and shut everything down gracefully on SIGINT/SIGTERM.
 """
 
 from __future__ import annotations
@@ -30,46 +30,6 @@ from app.scheduler import Scheduler
 from app.storage import Database
 
 log = get_logger(__name__)
-
-
-# ------------------------------------------------------------------ healthz
-class HealthzServer:
-    """Tiny TCP server answering one HTTP request with 200/500 (no deps)."""
-
-    def __init__(self, host: str, port: int) -> None:
-        self.host = host
-        self.port = port
-        self.healthy = True
-        self._server: asyncio.Server | None = None
-
-    async def __aenter__(self) -> HealthzServer:
-        self._server = await asyncio.start_server(self._handle, self.host, self.port)
-        log.info("healthz listening on %s:%d/healthz", self.host, self.port)
-        return self
-
-    async def __aexit__(self, *_exc: object) -> None:
-        if self._server is not None:
-            self._server.close()
-            with contextlib.suppress(Exception):
-                await self._server.wait_closed()
-
-    async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        try:
-            request = await asyncio.wait_for(reader.readline(), timeout=5)
-        except (TimeoutError, ConnectionError):  # pragma: no cover - defensive
-            request = b""
-        parts = request.split(b" ")
-        path = request.decode("latin-1").split(" ")[1] if len(parts) > 1 else "/healthz"
-        status, body = (200, "ok") if self.healthy else (503, "degraded")
-        writer.write(
-            f"HTTP/1.1 {status} {body}\r\nContent-Type: text/plain\r\n"
-            f"Content-Length: {len(body)}\r\nConnection: close\r\n\r\n{body}".encode()
-        )
-        with contextlib.suppress(Exception):
-            await writer.drain()
-            writer.close()
-        if path not in ("/healthz", "/health"):
-            log.debug("healthz request %s", path.strip())
 
 
 # ------------------------------------------------------------------ app shell
@@ -175,27 +135,38 @@ async def run_forever(settings: Settings, *, with_bot: bool = True) -> int:
     app.scheduler.on_run = _on_run
     await prepare(app)
 
-    health = HealthzServer("0.0.0.0", settings.healthz_port)
-    async with health:
-        try:
-            app.sender.start()
-            if with_bot and settings.telegram_available:
-                await app.start_bot()
-            elif with_bot:
-                log.warning(
-                    "Telegram disabled: set TELEGRAM_ENABLED/TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID"
-                )
-            app.scheduler.start()
+    try:
+        app.sender.start()
+        if settings.web_enabled:
+            from app.web import create_web_app, serve_web
 
-            stop = asyncio.Event()
-            loop = asyncio.get_running_loop()
-            for sig in (signal.SIGINT, signal.SIGTERM):
-                with contextlib.suppress(NotImplementedError):
-                    loop.add_signal_handler(sig, stop.set)
-            await stop.wait()
-        finally:
-            log.info("shutting down")
-            await app.stop()
+            web = create_web_app(db=app.db, settings=settings, pipeline=app.pipeline)
+            app.tasks.append(
+                asyncio.create_task(
+                    serve_web(web, host="0.0.0.0", port=settings.healthz_port),
+                    name="web",
+                )
+            )
+        else:
+            log.warning("web UI disabled (WEB_ENABLED=false); /healthz unavailable")
+
+        if with_bot and settings.telegram_available:
+            await app.start_bot()
+        elif with_bot:
+            log.warning(
+                "Telegram disabled: set TELEGRAM_ENABLED/TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID"
+            )
+        app.scheduler.start()
+
+        stop = asyncio.Event()
+        loop = asyncio.get_running_loop()
+        for sig in (signal.SIGINT, signal.SIGTERM):
+            with contextlib.suppress(NotImplementedError):
+                loop.add_signal_handler(sig, stop.set)
+        await stop.wait()
+    finally:
+        log.info("shutting down")
+        await app.stop()
     return 0
 
 
@@ -236,10 +207,12 @@ def main(argv: list[str] | None = None) -> int:
     setup_logging(settings.log_level, settings.log_json)
     register_secret(settings.telegram_bot_token)
     register_secret(settings.gemini_api_key)
+    register_secret(settings.web_token)
 
     if args.print_config:
         print(f"tz={settings.timezone} db={settings.db_path} digest={settings.digest_time}")
         print(f"llm={'on' if settings.llm_available else 'off'} tg={settings.telegram_available}")
+        print(f"web={'on' if settings.web_enabled else 'off'} port={settings.healthz_port}")
         print(f"owners={sorted(settings.owner_chat_ids())}")
         for src in load_sources().sources:
             print(f"  {'on ' if src.enabled else 'off'} {src.label} [{src.kind}]")

@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ job.title }} · jobhunter{% endblock %}
+{% block content %}
+<article class="detail">
+  <a class="back" href="/">← к ленте</a>
+  <header class="detail-head">
+    <div class="score big" data-score="{{ '%.0f'|format(job.score) }}">{{ '%.0f'|format(job.score) }}</div>
+    <div>
+      <p class="kicker">{{ job.company }}{% if job.channel %} · @{{ job.channel }}{% endif %}</p>
+      <h1>{{ job.title }}</h1>
+      <p class="lede">{{ job.salary_text }} · {{ job.location or 'гео неясно' }} · статус <strong>{{ status_labels.get(job.status, job.status) }}</strong></p>
+    </div>
+  </header>
+
+  <div class="detail-actions">
+    <a class="primary" href="{{ job.url }}" target="_blank" rel="noopener">открыть источник</a>
+    {% for st in statuses %}
+      <form method="post" action="/jobs/{{ job.id }}/status">
+        <input type="hidden" name="status" value="{{ st.value }}">
+        <input type="hidden" name="next" value="/jobs/{{ job.id }}">
+        <button type="submit" class="{% if job.status == st.value %}is-active{% endif %}">{{ status_labels[st.value] }}</button>
+      </form>
+    {% endfor %}
+  </div>
+
+  {% if job.score_breakdown %}
+  <section class="panel">
+    <h2>скоринг</h2>
+    <ul class="breakdown">
+      {% for label, pts in job.score_breakdown %}
+        <li><span>{{ label }}</span><span class="mono">{{ '%+.1f'|format(pts) }}</span></li>
+      {% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  {% if job.flags %}
+  <section class="panel">
+    <h2>флаги</h2>
+    <p class="chips">{% for f in job.flags %}<span class="chip">{{ f }}</span>{% endfor %}</p>
+  </section>
+  {% endif %}
+
+  {% if job.llm_summary %}
+  <section class="panel">
+    <h2>LLM</h2>
+    <p><strong>{{ job.llm_verdict }}</strong></p>
+    <p>{{ job.llm_summary }}</p>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>описание</h2>
+    <pre class="desc">{{ job.description }}</pre>
+  </section>
+</article>
+{% endblock %}

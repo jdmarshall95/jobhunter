@@ -236,6 +236,11 @@ class Settings(BaseSettings):
     healthz_port: int = 8080
     followup_days: int = 6
 
+    # --- Web UI (same port as /healthz) ---
+    web_enabled: bool = True
+    #: Empty = no auth (local). Set a shared secret before exposing the port.
+    web_token: str = ""
+
     @property
     def llm_available(self) -> bool:
         return bool(self.gemini_api_key)

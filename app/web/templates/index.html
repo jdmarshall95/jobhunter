@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}лента · jobhunter{% endblock %}
+{% block content %}
+<section class="hero-board">
+  <div class="hero-copy">
+    <p class="kicker">radar</p>
+    <h1>Вакансии</h1>
+    <p class="lede">Скоринг, воронка и источники — в одном экране. Telegram-бот остаётся на алертах.</p>
+  </div>
+  <div class="funnel" aria-label="воронка">
+    {% for st in statuses %}
+      {% set n = funnel.get(st.value, 0) %}
+      <a class="funnel-cell{% if filters.status == st.value %} is-active{% endif %}"
+         href="/?status={{ st.value }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.channel %}&channel={{ filters.channel }}{% endif %}">
+        <span class="funnel-n">{{ n }}</span>
+        <span class="funnel-l">{{ status_labels[st.value] }}</span>
+      </a>
+    {% endfor %}
+  </div>
+</section>
+
+<form class="filters" method="get" action="/">
+  <label>
+    <span>поиск</span>
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="компания, роль, devops…">
+  </label>
+  <label>
+    <span>статус</span>
+    <select name="status">
+      <option value="">все</option>
+      {% for st in statuses %}
+        <option value="{{ st.value }}" {% if filters.status == st.value %}selected{% endif %}>{{ status_labels[st.value] }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>
+    <span>канал</span>
+    <input type="text" name="channel" value="{{ filters.channel }}" placeholder="hrlunapark">
+  </label>
+  <label>
+    <span>мин. score</span>
+    <input type="number" name="min_score" value="{{ filters.min_score }}" min="0" max="100" step="1" placeholder="0">
+  </label>
+  <button type="submit">фильтр</button>
+</form>
+
+<p class="meta">{{ total }} вакансий · страница {{ filters.page }} / {{ pages }}</p>
+
+<section class="feed" aria-label="лента вакансий">
+  {% if not jobs %}
+    <p class="empty">Пусто. Запустите сбор или ослабьте фильтр.</p>
+  {% endif %}
+  {% for job in jobs %}
+    <article class="row" data-id="{{ job.id }}">
+      <a class="row-main" href="/jobs/{{ job.id }}">
+        <div class="score" data-score="{{ '%.0f'|format(job.score) }}">{{ '%.0f'|format(job.score) }}</div>
+        <div class="row-body">
+          <h2>{{ job.title }}</h2>
+          <p class="row-sub">
+            <span>{{ job.company }}</span>
+            <span>·</span>
+            <span>{{ job.salary_text }}</span>
+            {% if job.channel %}<span>·</span><span class="chip">@{{ job.channel }}</span>{% endif %}
+            <span>·</span>
+            <span class="muted">{{ job.status }}</span>
+          </p>
+        </div>
+      </a>
+      <div class="row-actions">
+        <a class="ghost" href="{{ job.url }}" target="_blank" rel="noopener">открыть</a>
+        <form method="post" action="/jobs/{{ job.id }}/status">
+          <input type="hidden" name="status" value="saved">
+          <input type="hidden" name="next" value="{{ request.url }}">
+          <button type="submit">★</button>
+        </form>
+        <form method="post" action="/jobs/{{ job.id }}/status">
+          <input type="hidden" name="status" value="applied">
+          <input type="hidden" name="next" value="{{ request.url }}">
+          <button type="submit">✓</button>
+        </form>
+        <form method="post" action="/jobs/{{ job.id }}/status">
+          <input type="hidden" name="status" value="ignored">
+          <input type="hidden" name="reason" value="other">
+          <input type="hidden" name="next" value="{{ request.url }}">
+          <button type="submit" class="danger">✕</button>
+        </form>
+      </div>
+    </article>
+  {% endfor %}
+</section>
+
+{% if pages > 1 %}
+<nav class="pager">
+  {% if filters.page > 1 %}
+    <a href="/?page={{ filters.page - 1 }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.channel %}&channel={{ filters.channel }}{% endif %}{% if filters.min_score != '' %}&min_score={{ filters.min_score }}{% endif %}">← назад</a>
+  {% endif %}
+  {% if filters.page < pages %}
+    <a href="/?page={{ filters.page + 1 }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.channel %}&channel={{ filters.channel }}{% endif %}{% if filters.min_score != '' %}&min_score={{ filters.min_score }}{% endif %}">дальше →</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

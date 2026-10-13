@@ -14,6 +14,9 @@ Telethon подключается только когда есть ``TG_API_ID``
 Имена каналов берутся из ``config/sources.yaml`` (``queries``) и из
 бот-управляемого списка (``/addchannel``), который пайплайн подкладывает через
 :meth:`TelegramSource.add_channels`.
+
+Каналы вроде ``hrlunapark`` (Luna Park) пишут посты в формате
+``tl;dr: role, $XXk–YYk, remote`` + компания в первой строке тела.
 """
 
 from __future__ import annotations
@@ -29,20 +32,28 @@ from app.sources.base import SourcePlugin
 PREVIEW_URL = "https://t.me/s/{channel}"
 
 #: Каналы по умолчанию: проверены, отдают непустое превью без авторизации.
-DEFAULT_CHANNELS = ("devops_vacancies", "habr_career", "getjob")
+DEFAULT_CHANNELS = ("devops_vacancies", "habr_career", "getjob", "hrlunapark")
 
 #: «DevOps-инженер» / «Системный инженер/DevOps Engineer (KSS)» — первая строка
 _WS_RE = re.compile(r"[ \t\u00a0]+")
 _TITLE_MAX = 120
-
-
+_TLDR_RE = re.compile(r"^tl;?\s*dr\s*:\s*(.+)$", re.IGNORECASE)
+#: «Reelful — приложение…», «Recraft — …», «Acme - hiring…»
+_COMPANY_LEAD_RE = re.compile(
+    r"^([A-Za-zА-Яа-яЁё0-9][\w.&'’-]{0,48}?)\s*[—–\-]\s+\S",
+    re.UNICODE,
+)
 def _clean_lines(text: str) -> list[str]:
     lines = [_WS_RE.sub(" ", line).strip() for line in text.splitlines()]
     return [line for line in lines if line]
 
 
 def _title_of(lines: list[str]) -> str:
-    """First meaningful line: emoji-only and bullet-only lines are skipped."""
+    """Prefer ``tl;dr: …`` payload; otherwise the first meaningful line."""
+    for line in lines:
+        m = _TLDR_RE.match(line)
+        if m:
+            return m.group(1).strip()[:_TITLE_MAX]
     for line in lines:
         if len(line) < 4:
             continue
@@ -50,6 +61,23 @@ def _title_of(lines: list[str]) -> str:
             continue
         return line[:_TITLE_MAX]
     return (lines[0] if lines else "")[:_TITLE_MAX]
+
+
+def _company_from_body(lines: list[str], *, channel: str, channel_title: str) -> str:
+    """Pull the hiring company out of Luna Park-style posts when possible."""
+    for line in lines:
+        if _TLDR_RE.match(line):
+            continue
+        m = _COMPANY_LEAD_RE.match(line)
+        if m:
+            name = m.group(1).strip()
+            # Skip meta openers that aren't company names.
+            if name.casefold() not in {"это", "tl", "update", "как", "для", "ищем"}:
+                return name
+    # Aggregator title («Take Friends to Luna Park») is not the employer.
+    if channel.casefold() == "hrlunapark":
+        return f"@{channel}"
+    return channel_title or f"@{channel}"
 
 
 def parse_telegram(
@@ -76,9 +104,8 @@ def parse_telegram(
             continue
         time_node = node.select_one("time")
         author_node = node.select_one("a.tgme_widget_message_owner_name")
-        company = (
-            author_node.get_text(" ", strip=True) if author_node else ""
-        ) or f"@{channel}"
+        channel_title = author_node.get_text(" ", strip=True) if author_node else ""
+        company = _company_from_body(lines, channel=channel, channel_title=channel_title)
         jobs.append(
             RawJob(
                 source=source,

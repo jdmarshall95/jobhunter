@@ -308,6 +308,9 @@ class Database:
         since_days: int | None = None,
         only_unnotified: bool = False,
         include_suspicious: bool | None = None,
+        q: str | None = None,
+        source: str | None = None,
+        channel: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> list[sqlite3.Row]:
@@ -329,6 +332,17 @@ class Database:
             where.append("suspicious = 0")
         elif include_suspicious:
             where.append("suspicious = 1")
+        if source:
+            where.append("source = ?")
+            params.append(source)
+        if channel:
+            # Telegram posts store ``{"channel": "hrlunapark", ...}`` in ``raw``.
+            where.append("raw LIKE ?")
+            params.append(f'%"channel": "{channel.strip().lstrip("@")}"%')
+        if q:
+            needle = f"%{q.strip()}%"
+            where.append("(title LIKE ? OR company LIKE ? OR description LIKE ? OR url LIKE ?)")
+            params.extend([needle, needle, needle, needle])
         sql = "SELECT rowid AS id_row, * FROM jobs"
         if where:
             sql += " WHERE " + " AND ".join(where)

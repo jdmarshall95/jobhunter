@@ -24,8 +24,12 @@ docker compose logs -f
 
 ```bash
 curl -s localhost:8090/healthz   # "ok" + HTTP 200 (503 = degraded)
+open http://localhost:8090/      # веб-интерфейс (лента + воронка)
 docker compose ps                # STATUS: healthy
 ```
+
+Веб-UI живёт на том же порту, что `/healthz`. Опционально защитите его
+`WEB_TOKEN` в `.env` — без токена интерфейс открыт (удобно локально).
 
 ### Без Docker (локальная разработка)
 
@@ -47,14 +51,15 @@ python -m app.main                  # обычный режим: планиро�
 ```
 jobhunter/
 ├── app/
-│   ├── main.py            # точка входа: healthz, --once/--dry-run/--print-config
+│   ├── main.py            # точка входа: web+/healthz, --once/--dry-run/--print-config
 │   ├── scheduler.py       # APScheduler: сбор, дайджест, weekly, фоллоу-апы, бэкап
 │   ├── config.py          # pydantic-settings (.env) + YAML profile/sources
 │   ├── models.py          # единая схема Job, canonical_url, статусы воронки
 │   ├── http.py            # httpx: таймауты, экспоненциальный retry, ETag-кэш, троттлинг
 │   ├── logging_setup.py   # структурированные логи + маскирование секретов
 │   ├── bot/               # handlers (aiogram 3), keyboards, render (HTML), sender (очередь)
-│   ├── sources/           # плагины: greenhouse, ashby, lever, remoteok, wwr_rss, hh
+│   ├── web/               # FastAPI UI: лента, фильтры, статусы, /api/*
+│   ├── sources/           # плагины: greenhouse, ashby, lever, remoteok, wwr_rss, hh, telegram
 │   ├── pipeline/          # normalize → dedup → filters → runner
 │   ├── scoring/           # прозрачный скоринг 0–100 с breakdown
 │   ├── llm/               # Gemini REST + бюджет + кэш по хэшу описания
@@ -97,7 +102,9 @@ jobhunter/
 | `FETCH_CONCURRENCY` | `4` | параллельность источников |
 | `DOMAIN_MIN_INTERVAL` | `1.2` | пауза между запросами к одному домену |
 | `FETCH_INTERVAL_MINUTES` | `60` | период сбора (минимум 5) |
-| `HEALTHZ_PORT` | `8080` | порт `/healthz` внутри контейнера |
+| `HEALTHZ_PORT` | `8080` | порт веб-UI и `/healthz` внутри контейнера |
+| `WEB_ENABLED` | `true` | рубильник веб-интерфейса |
+| `WEB_TOKEN` | — | shared secret; пусто = без авторизации |
 | `FOLLOWUP_DAYS` | `6` | напоминание о фоллоу-апе |
 
 Бот отвечает **только владельцу** (`TELEGRAM_CHAT_ID`, можно список через запятую):
@@ -170,8 +177,10 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 Работают **без Telethon**: парсится публичное веб-превью `https://t.me/s/<channel>`
 ([`app/sources/telegram.py`](app/sources/telegram.py)) — ни сессии, ни `TG_API_ID` не нужны.
 Каналы берутся из `queries` в `sources.yaml` (проверены `devops_vacancies`, `habr_career`,
-`getjob`) и расширяются из бота: `/addchannel <имя>` / `/rmchannel <имя>` — список живёт в таблице
-`kv` и подмешивается перед каждым сбором. Пустой или недоступный канал не валит остальные:
+`getjob`, `hrlunapark` / [Luna Park](https://t.me/hrlunapark)) и расширяются из бота:
+`/addchannel <имя>` / `/rmchannel <имя>` — список живёт в таблице `kv` и подмешивается перед
+каждым сбором. Для Luna Park парсер читает `tl;dr:` как заголовок и компанию из строки
+вида `Reelful — …`. Пустой или недоступный канал не валит остальные:
 источник падает только когда не спарсилось ничего.
 
 Telethon остаётся опциональным апгрейдом (нужен для приватных каналов и истории глубже превью):
@@ -266,7 +275,8 @@ docker compose exec jobhunter python -c \
 
 ## Известные ограничения
 
-- Источники: 8 Greenhouse-бордов, 1 Ashby, RemoteOK, WWR RSS, Хабр Карьера, 3 Telegram-канала.
+- Источники: 8 Greenhouse-бордов, 1 Ashby, RemoteOK, WWR RSS, Хабр Карьера, 4 Telegram-канала
+  (включая Luna Park — там чаще ML/full-stack, чем DevOps, так что score часто низкий).
   Lever выключен (публичные слоги крипто-компаний дают 404), hh.ru выключен (API отвечает
   403 `{"errors":[{"type":"forbidden"}]}` на все варианты UA/HTTP — блокировка по IP/гео;
   лечится прокси).
