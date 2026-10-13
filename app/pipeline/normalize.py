@@ -52,14 +52,28 @@ _MONEY_SINGLE_RE = re.compile(
 
 
 def strip_html(text: str) -> str:
-    """Safely remove markup (BeautifulSoup, no eval, no auto-link fetching)."""
+    """Safely remove markup (BeautifulSoup, no eval, no auto-link fetching).
+
+    Greenhouse (and a few other ATS boards) ship ``content`` as *escaped* HTML
+    (``&lt;p&gt;…&lt;/p&gt;``). Unescape first, otherwise the ``<``/``>`` guard
+    skips BeautifulSoup and the tags survive into the card.
+    """
     if not text:
         return ""
+    # Entity-decode repeatedly: some boards double-escape (``&amp;lt;p&amp;gt;``).
+    prev = None
+    while prev != text:
+        prev = text
+        text = unescape(text)
     if "<" in text and ">" in text:
-        text = BeautifulSoup(text, "html.parser").get_text(" ")
-    text = unescape(text)
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
+        soup = BeautifulSoup(text, "html.parser")
+        # Keep paragraph / list structure instead of one endless line.
+        for tag in soup.find_all(["br", "p", "div", "li", "h1", "h2", "h3", "h4", "tr"]):
+            tag.append("\n")
+        text = soup.get_text(" ")
+    text = text.replace("\r\n", "\n").replace("\r", "\n").replace("\xa0", " ")
     text = _WS_RE.sub(" ", text)
+    text = re.sub(r"[ \t]*\n[ \t]*", "\n", text)
     return _NL_RE.sub("\n\n", text).strip()
 
 

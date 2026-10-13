@@ -45,6 +45,21 @@ class TestStripHtml:
     def test_plain_text_untouched(self) -> None:
         assert strip_html("no markup here") == "no markup here"
 
+    def test_greenhouse_escaped_html_is_fully_stripped(self) -> None:
+        # boards-api.greenhouse.io returns content as entity-escaped HTML.
+        raw = (
+            "&lt;p&gt;&lt;strong&gt;About the Company&lt;/strong&gt;&lt;/p&gt;\n"
+            "&lt;p&gt;Gemini is a global crypto and&nbsp;Web3 platform.&lt;/p&gt;"
+        )
+        out = strip_html(raw)
+        assert "<p>" not in out
+        assert "&lt;" not in out
+        assert "About the Company" in out
+        assert "Gemini is a global crypto and Web3 platform." in out
+
+    def test_double_escaped_entities(self) -> None:
+        assert strip_html("&amp;lt;p&amp;gt;Hi&amp;lt;/p&amp;gt;") == "Hi"
+
 
 class TestDetectRemote:
     def test_remote_token(self) -> None:
