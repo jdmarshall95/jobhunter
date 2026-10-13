@@ -31,7 +31,11 @@ def _optional_float(value: Any) -> float | None:
     return float(value)
 
 
-OptionalFloat = Annotated[float | None, BeforeValidator(_optional_float)]
+# Query() must live inside Annotated so BeforeValidator runs before float parsing.
+# Default goes on `=` (FastAPI rejects default= inside Annotated Query).
+OptionalFloatQuery = Annotated[
+    float | None, BeforeValidator(_optional_float), Query()
+]
 
 WEB_ROOT = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(WEB_ROOT / "templates"))
@@ -184,7 +188,7 @@ def create_web_app(
         q: str | None = None,
         source: str | None = None,
         channel: str | None = None,
-        min_score: OptionalFloat = Query(default=None),
+        min_score: OptionalFloatQuery = None,
         page: int = Query(default=1, ge=1),
         db_: Database = Depends(require_db),
     ) -> HTMLResponse:
@@ -278,7 +282,7 @@ def create_web_app(
         q: str | None = None,
         source: str | None = None,
         channel: str | None = None,
-        min_score: OptionalFloat = None,
+        min_score: OptionalFloatQuery = None,
         limit: int = Query(default=50, ge=1, le=200),
         offset: int = Query(default=0, ge=0),
         db_: Database = Depends(require_db),
