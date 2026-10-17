@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from pymongo import ASCENDING, DESCENDING, ReturnDocument
-from pymongo.errors import PyMongoError
+from pymongo.errors import DuplicateKeyError
 
 from app.logging_setup import get_logger
 from app.models import Job, canonical_url
@@ -187,6 +187,8 @@ class Database:
             "score_breakdown": [list(item) for item in job.score_breakdown],
             "flags": list(job.flags),
             "geo_restricted": bool(job.geo_restricted),
+            "geo_scope": str(job.geo_scope),
+            "geo_place": job.geo_place,
             "suspicious": bool(job.suspicious),
             "llm_verdict": job.llm_verdict,
             "llm_summary": job.llm_summary,
@@ -196,34 +198,14 @@ class Database:
             "updated_at": now_iso(),
         }
 
-    async def upsert_job(self, job: Job) -> tuple[int, bool]:
-        """Insert or refresh. Returns ``(db_id, is_new)``.
-
-        Dedup happens here: an existing document keeps its status, first_seen_at
-        and notified_at; only freshness fields are updated. A second source for
-        the same vacancy appends to ``sources`` instead of creating a new card.
-        """
-        existing = await self.get_job(job.id)
-        if existing is None:
-            seq = await self._next_seq()
-            doc = self._to_doc(job, seq=seq, first_seen=now_iso())
-            try:
-                await self.db["jobs"].insert_one(doc)
-            except PyMongoError as exc:  # unique canonical_url race
-                log.warning("insert failed job=%s: %s", job.id, exc)
-                existing = await self.get_job(job.id)
-                if existing is None:
-                    raise
-                return int(existing.get("seq", 0)), False
-            return seq, True
-
+    async def _merge_into(self, existing: dict[str, Any], job: Job) -> None:
+        """Refresh an existing document; identity fields stay as they were."""
         merged = list(existing.get("sources") or []) + list(job.sources or [job.source])
-        sources = sorted(set(merged))
         await self.db["jobs"].update_one(
-            {"_id": job.id},
+            {"_id": existing["_id"]},
             {
                 "$set": {
-                    "sources": sources,
+                    "sources": sorted(set(merged)),
                     "url": job.url,
                     "location": job.location,
                     "remote": job.remote,
@@ -240,6 +222,8 @@ class Database:
                     "score_breakdown": [list(item) for item in job.score_breakdown],
                     "flags": list(job.flags),
                     "geo_restricted": bool(job.geo_restricted),
+                    "geo_scope": str(job.geo_scope),
+                    "geo_place": job.geo_place,
                     "suspicious": bool(job.suspicious),
                     "llm_verdict": job.llm_verdict,
                     "llm_summary": job.llm_summary,
@@ -247,6 +231,42 @@ class Database:
                 }
             },
         )
+
+    async def upsert_job(self, job: Job) -> tuple[int, bool]:
+        """Insert or refresh. Returns ``(db_id, is_new)``.
+
+        Dedup happens here: an existing document keeps its status, first_seen_at
+        and notified_at; only freshness fields are updated. A second source for
+        the same vacancy appends to ``sources`` instead of creating a new card.
+        """
+        existing = await self.get_job(job.id)
+        if existing is None:
+            seq = await self._next_seq()
+            doc = self._to_doc(job, seq=seq, first_seen=now_iso())
+            try:
+                await self.db["jobs"].insert_one(doc)
+            except DuplicateKeyError as exc:
+                # ``canonical_url`` is unique, but the content hash is not the
+                # same key: an ATS that rewords the title or moves the location
+                # produces a new ``_id`` for a URL we already store. Merging into
+                # the document that owns the URL is the only way the run keeps
+                # going — re-reading by ``_id`` here always misses.
+                clash = await self.db["jobs"].find_one({"canonical_url": doc["canonical_url"]})
+                if clash is None:
+                    log.error("insert failed job=%s: %s", job.id, exc)
+                    raise
+                await self._merge_into(clash, job)
+                log.info(
+                    "dedup by url: %s -> %s (%s / %s)",
+                    job.id,
+                    clash.get("id"),
+                    clash.get("company"),
+                    clash.get("title"),
+                )
+                return int(clash.get("seq", 0)), False
+            return seq, True
+
+        await self._merge_into(existing, job)
         return int(existing.get("seq", 0)), False
 
     async def get_job(self, job_id: str) -> dict[str, Any] | None:

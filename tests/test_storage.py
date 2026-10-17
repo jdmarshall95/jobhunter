@@ -54,6 +54,30 @@ class TestUpsert:
 
         assert row["canonical_url"] == "https://a.io/jobs/1"
 
+    async def test_reworded_title_merges_by_url(self, db: Database) -> None:
+        """ATS rewrites a title -> new content hash, same URL: merge, don't raise.
+
+        The unique ``canonical_url`` index used to abort the whole hourly run
+        with E11000 because the retry re-read the document by the *new* ``_id``.
+        """
+        first = make_job(title="HRBP Lead", location="Abu Dhabi, UAE")
+        await db.upsert_job(first)
+        await db.set_status(first.id, "saved")
+
+        second = make_job(title="HR Business Partner Lead", location="Abu Dhabi")
+        assert second.id != first.id
+
+        db_id, is_new = await db.upsert_job(second)
+
+        assert is_new is False
+        assert db_id > 0
+        assert await db.count_jobs() == 1
+        row = await db.get_job(first.id)
+        assert row is not None
+        assert row["title"] == "HRBP Lead"  # the stored card keeps its identity
+        assert row["status"] == "saved"
+        assert row["location"] == "Abu Dhabi"  # freshness fields do refresh
+
 
 class TestStatuses:
     async def test_set_status_returns_false_for_unknown_id(self, db: Database) -> None:
