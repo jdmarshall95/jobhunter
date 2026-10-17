@@ -1,7 +1,8 @@
 """Hard filters: remote-only, role keywords, exclude keywords, blocklists.
 
 A filter never silently drops a geo-restricted vacancy: it is kept but flagged,
-so the customer can see *why* something looked odd.
+so the customer can see *why* something looked odd. Staleness is the exception:
+a vacancy older than ``filters.max_age_days`` is dropped outright.
 """
 
 from __future__ import annotations
@@ -15,6 +16,7 @@ from app.config import (
     role_matches,
 )
 from app.models import GeoScope, Job
+from app.pipeline.normalize import age_days
 
 #: Titles that are clearly not a DevOps/SRE/platform role.
 NON_ROLE_TOKENS = (
@@ -59,7 +61,18 @@ def apply_hard_filters(
     reasons: list[str] = []
     flags: list[str] = []
 
-    # 1. Role keywords: title first, then the head of the description.
+    # 1. Freshness: a vacancy that has been sitting for more than three months is
+    # not worth a card, however well it matches. This is the one hard date drop —
+    # an ATS board keeps stale postings listed for months after the role is gone.
+    # Vacancies *without* a publication date are kept: absence of a date is not
+    # staleness (``age_days`` falls back to ``first_seen_at``, i.e. 0 days).
+    if f.max_age_days > 0:
+        age = age_days(job)
+        if age > f.max_age_days:
+            reasons.append(f"вакансии {age:.0f} дн. — старше лимита {f.max_age_days}")
+            return FilterOutcome(passed=False, reasons=reasons, flags=flags)
+
+    # 2. Role keywords: title first, then the head of the description.
     include = [k.casefold() for k in f.include_keywords]
     if not role_matches(job.title, job.description, f):
         # Soft by default: the scorer applies ``penalty_irrelevant_role`` and
@@ -70,7 +83,7 @@ def apply_hard_filters(
         else:
             flags.append(ROLE_MISMATCH_FLAG)
 
-    # 2. Remote-only + geo scope. A geo-tied vacancy is never dropped here: the
+    # 3. Remote-only + geo scope. A geo-tied vacancy is never dropped here: the
     # scorer penalises it and ``min_score`` decides, so the customer still sees
     # *why* a "remote" job looked odd (ТЗ §6).
     if profile.candidate.work_mode == "remote" and job.remote is False:
@@ -82,7 +95,7 @@ def apply_hard_filters(
     elif job.geo_scope in (GeoScope.COUNTRY, GeoScope.REGION):
         flags.append("не worldwide remote")
 
-    # 3. Exclude keywords (title is decisive, body only for strong tokens).
+    # 4. Exclude keywords (title is decisive, body only for strong tokens).
     # Luna Park often lists several roles in one tl;dr («AI, frontend, full-stack
     # and other engineers») — a secondary «frontend» must not kill the whole card
     # when a platform/infra/devops angle is also present.
@@ -113,13 +126,13 @@ def apply_hard_filters(
         if kw and kw.casefold() in title:
             reasons.append(f"стоп-слово из бота «{kw}»")
 
-    # 4. Company blocklist: static (profile.yaml) + bot-managed (/block).
+    # 5. Company blocklist: static (profile.yaml) + bot-managed (/block).
     company = job.company.casefold()
     for blocked in [*f.exclude_companies, *(blocklist or [])]:
         if blocked and blocked.casefold() in company:
             reasons.append(f"компания в блоке «{blocked}»")
 
-    # 5. Sanity: a title that is not an engineering role at all.
+    # 6. Sanity: a title that is not an engineering role at all.
     if not any(tok in title for tok in NON_ROLE_TOKENS) and not any(
         k in title for k in include
     ):

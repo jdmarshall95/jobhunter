@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -194,6 +195,49 @@ class TestCompanyBlocklist:
         outcome = apply_hard_filters(job, profile, blocklist=["crypto"])
 
         assert outcome.passed is False
+
+
+class TestFreshness:
+    """Вакансии старше трёх месяцев не попадают в воронку (жёсткий фильтр)."""
+
+    @staticmethod
+    def _aged(days: int) -> Any:
+        return good_job(posted_at=datetime.now(tz=UTC) - timedelta(days=days))
+
+    def test_vacancy_older_than_three_months_is_dropped(self, profile: Any) -> None:
+        outcome = apply_hard_filters(self._aged(120), profile)
+
+        assert outcome.passed is False
+        assert any("старше лимита 90" in r for r in outcome.reasons)
+
+    def test_vacancy_within_the_limit_passes(self, profile: Any) -> None:
+        assert apply_hard_filters(self._aged(89), profile).passed is True
+
+    def test_exactly_the_limit_is_already_stale(self, profile: Any) -> None:
+        # Граница строгая: 90 дней и ни днём больше.
+        assert apply_hard_filters(self._aged(90), profile).passed is False
+
+    def test_vacancy_without_a_date_is_kept(self, profile: Any) -> None:
+        # Отсутствие даты публикации — не то же самое, что устаревание.
+        assert apply_hard_filters(good_job(), profile).passed is True
+
+    def test_zero_limit_disables_the_check(self, profile: Any) -> None:
+        profile.filters.max_age_days = 0
+
+        assert apply_hard_filters(self._aged(900), profile).passed is True
+
+    def test_stale_vacancy_is_dropped_before_the_role_check(self, profile: Any) -> None:
+        # Ранний выход: у просроченной вакансии не считаем ни роль, ни гео.
+        job = good_job(
+            title="Sales Manager",
+            description="Sells everything but engineering.",
+            posted_at=datetime.now(tz=UTC) - timedelta(days=400),
+        )
+
+        outcome = apply_hard_filters(job, profile)
+
+        assert outcome.passed is False
+        assert outcome.flags == []
 
 
 class TestSanctionsWarning:

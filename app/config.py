@@ -118,6 +118,10 @@ class Filters(BaseModel):
     role_strict: bool = False
     #: How many characters of the description head are scanned for a role match.
     role_scan_chars: int = 1200
+    #: Hard freshness limit in days: a vacancy published earlier than this never
+    #: reaches the funnel. ``0`` disables the check. Vacancies without a
+    #: publication date are always kept (absence is not staleness).
+    max_age_days: int = 90
 
 
 def role_matches(title: str, description: str, f: Filters) -> bool:
