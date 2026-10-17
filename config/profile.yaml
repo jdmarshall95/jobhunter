@@ -1,15 +1,20 @@
 # Профиль кандидата и правила отбора. Правится без переписывания кода.
 # Структура описана в app/config.py (Profile -> Candidate / Filters / ScoringWeights).
+# Навыки, факты и формулировки взяты из config/pool.yaml (проверенные формулировки резюме).
 
 candidate:
-  name: Ivan
+  name: Ivan Drozdov
   languages: [ru, en]
   target_roles:
     - DevOps
     - SRE
     - Platform Engineer
     - Infrastructure Engineer
+    - Systems Engineer
+    - Cloud Engineer
     - MLOps
+    - ML Infrastructure
+    - Technical Lead
   seniority: [middle, senior, lead]
   work_mode: remote
   salary_expectation_usd_month:
@@ -19,68 +24,120 @@ candidate:
     net: true
     # Усреднённая налоговая нагрузка для пересчёта net <-> gross.
     tax_rate: 0.13
+
+  # Ядро = то, что реально ищут в JD по моей роли и что подтверждено резюме.
+  # Совпадение подстрокой, поэтому короткие/скользкие аббревиатуры (Go, ML)
+  # держим в stack_plus, а не здесь: stack_core_each стоит дорого.
   stack_core:
     - Kubernetes
+    - Docker
     - Terraform
     - Ansible
-    - Vault
-    - Prometheus
-    - Grafana
+    - SaltStack
     - Linux
-    - Docker
-    - Helm
     - GitLab CI
     - Jenkins
-    - SaltStack
-    - AWS
-    - PostgreSQL
-    - Redis
+    - Prometheus
+    - Grafana
     - Python
-    - Go
     - Bash
+    - PostgreSQL
+    - CI/CD
+  # Плюс-стек: кап stack_plus_cap всё равно ограничивает вклад, поэтому список
+  # широкий — любой подтверждённый навык из резюме должен «ловиться».
   stack_plus:
-    - Loki
-    - Keycloak
-    - WireGuard
-    - Envoy
-    - Consul
-    - OpenStack
+    - Podman
     - Proxmox
+    - OpenStack
     - KVM
-    - MinIO
+    - Vault
+    - Keycloak
+    - OpenLDAP
+    - Consul
+    - Envoy
+    - HAProxy
+    - Keepalived
+    - Zabbix
+    - VictoriaMetrics
+    - Vector
+    - Graylog
+    - Datadog
+    - Kafka
+    - ClickHouse
+    - Trino
+    - MongoDB
+    - Cassandra
+    - Redis
+    - Elasticsearch
+    - Ceph
     - S3
+    - AWS
+    - Yandex Cloud
+    - GitHub Actions
+    - TeamCity
+    - Artifactory
     - GPU
+    - llama.cpp
+    - FFmpeg
+    - WireGuard
+    - NetBox
     - bare-metal
+    - Golang
+    - Go
+  # Реальные домены кандидата: gaming/media-платформы, большая инфраструктура,
+  # AI/ML. Порядок важен только для подписи в разборе — bonus даёт первое совпадение.
+  # «ai» и «ml» как отдельные токены не берём: подстрока ловит email/html.
   domains_priority:
-    - crypto
-    - web3
-    - blockchain
-    - exchange
-    - wallet
-    - staking
-    - validator
-    - node
-    - DeFi
+    - gaming
+    - igaming
+    - casino
+    - gambling
+    - betting
+    - media
+    - streaming
+    - video
+    - highload
+    - high-load
+    - mlops
+    - machine learning
+    - llm
+    - ai/ml
+    - artificial intelligence
+    - platform
+    - infrastructure
     - fintech
     - payments
+    - telecom
+    - web3
   want_russian_speaking_team: true
 
   # Только проверенные факты из резюме: LLM разрешено использовать их как есть,
   # выдумывать опыт запрещено (см. prompts/draft.md).
   facts:
-    - "200+ серверов под управлением: ручной труд сокращён примерно на 70%"
-    - "Экономия ~€60K в год на оптимизации кэширования"
-    - "Инциденты: с 2–3 в месяц до 0–1 после внедрения мониторинга и CI/CD"
-    - "Jenkins-пайплайны: на 90% меньше конфликтов окружений"
-    - "Онбординг нового разработчика: с 1–2 дней до 1 часа"
-    - "Утилизация GPU: с 40% до 80%"
-    - "Стек: Kubernetes, Terraform, Ansible, SaltStack, Prometheus/Grafana, GitLab CI, AWS, PostgreSQL, Redis"
-  headline: "DevOps / SRE Engineer (crypto-ready, remote)"
+    - "7+ лет в production-инфраструктуре: от виртуализации и сети до Kubernetes и AI-сервисов"
+    - "600+ хостов на 3 площадках (MSK / SPB / ADMAN + DEAC): 80 ролей, 480+ стейтов, 607 node-определений в Salt"
+    - "25+ собственных production-ролей (memcache, media-конвертеры, Rocket.Chat, Cassandra, бэкапы, мониторинг, deploy)"
+    - "140+ коммитов (~5k строк, 400+ затронутых файлов): изменения инфраструктуры — ревьюемый код, а не правки по SSH"
+    - "Миграции Memcached Corosync → Keepalived на 10 нодах, Docker → Podman, Xen → Proxmox; выведено из эксплуатации 40+ legacy-хостов"
+    - "llama.cpp (llama-server) на 2× RTX 3080 Ti + 4× Tesla V100: throughput 32.4 → 74.8 tok/s при двух параллельных контекстах по 262K токенов"
+    - "NSFW-модерация (текст + изображение) переведена на self-hosted модели: команда модерации сокращена 50 → 20 человек"
+    - "OpenStack как сервис с явными failure domains: Patroni для PostgreSQL HA, GlusterFS, Consul, Envoy; провижининг Ansible/Python + GitLab CI"
+    - "NeuroCut: agentic-пайплайн Whisper → LLM → FFmpeg, ~30 с e2e на 2-минутный источник (медиана 17 с), Whisper large-v3 до 9× realtime на одном 8 GB GPU"
+    - "Сеть и edge: BIRD/OSPF, WireGuard, Kea DHCP (HA-пара), FreeRADIUS/LDAP, Oxidized → Git/Ceph, nginx/Angie + Squid/CloudFront"
+    - "Наблюдаемость: Prometheus/Grafana, Zabbix, VictoriaMetrics + vmalert, Vector, Graylog, Datadog; собственные exporters (smartctl, memcached, Cassandra, Java heap)"
+    - "Data-платформы: PostgreSQL/MySQL, MongoDB (replica set + arbiter), Cassandra, Kafka, ClickHouse, Trino, Elasticsearch/OpenSearch"
+    - "Автоматизация на Python (FastAPI, asyncio), Go и Bash; TypeScript/React — для внутренних инструментов"
+    - "Продукт под нагрузкой: 12 киосков video-analytics и 5 GPU-серверов обучения в постоянной эксплуатации"
+    - "Образование: МГТУ им. Н. Э. Баумана, «Информационная безопасность телекоммуникационных систем»"
+    - "Стек: Kubernetes, Docker/Podman, Terraform, Ansible, SaltStack, Prometheus/Grafana, GitLab CI/Jenkins, PostgreSQL, Kafka, ClickHouse, AWS/Yandex Cloud"
+  headline: "Senior DevOps / SRE / MLOps Engineer (gaming & AI infrastructure, remote)"
   summary: >-
-    Middle/Senior DevOps-инженер с опытом эксплуатации 200+ серверов, Kubernetes,
-    Terraform, Ansible/SaltStack и GitLab CI. Работал с highload-инфраструктурой,
-    мониторингом Prometheus/Grafana и базовыми данными (PostgreSQL, Redis).
-    Ищу удалённую позицию в crypto/web3/fintech с русскоязычной командой.
+    Senior DevOps / infrastructure engineer с 7+ годами в production: Kubernetes,
+    большие мульти-сайтовые парки (600+ хостов, 3 площадки), CI/CD и GitOps,
+    full-stack наблюдаемость и IaC (Terraform, Ansible, SaltStack). Автоматизирую
+    на Python и Go, self-hosted LLM и агентов использую для операционного рычага
+    (llama.cpp, Whisper, GPU-инференс). Ищу удалённую позицию в gaming / media /
+    AI-инфраструктуре с русскоязычной командой.
 
 filters:
   # Роль ищется сначала в заголовке, затем в начале описания (role_scan_chars).
@@ -102,6 +159,7 @@ filters:
     - cloud engineer
     - cloud
     - mlops
+    - ml infrastructure
     - devsecops
     - reliability
     - production engineer
@@ -142,6 +200,11 @@ scoring:
   penalty_residency: -6.0
   penalty_scam_suspect: -10.0
   geo_restricted: -4.0
+  # «Remote - USA»: удалёнка, но нанимают только из США — кандидат из Европы
+  # не проходит. Штраф сильный, но вакансия остаётся в ленте: решает min_score.
+  penalty_usa_only: -30.0
+  # Удалёнка, привязанная к одной стране/городу или не-европейскому региону.
+  penalty_not_worldwide: -12.0
 
 # Порог «интересно» для дайджеста и LLM-перескоринга.
 min_score: 40

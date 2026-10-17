@@ -1,0 +1,419 @@
+---
+identity:
+  name: Ivan Drozdov
+  contacts: >-
+    Open to Remote | +7 966 307 5115 | hiraetari@gmail.com |
+    GitHub: @jdmarshall95 | Telegram: @atenboro
+summaries:
+  general: Full-stack software engineer. Author of NeuroCut — an agentic video editing
+    tool. 7+ years shipping and running production infrastructure.
+  devops_senior: 'Senior DevOps / infrastructure engineer with 7+ years running production
+    systems: Kubernetes, high-load and multi-site estates, CI/CD & GitOps, observability,
+    and IaC (Terraform, Ansible, Salt). Comfortable at the infra↔backend boundary;
+    automate with Python and Go. Hands-on with self-hosted LLM/agent tooling for ops
+    automation.'
+  devops_gaming: 'Senior DevOps engineer focused on scaling production infrastructure
+    for product teams: Kubernetes, distributed estates, reliability, CI/CD/GitOps,
+    and full-stack observability. 7+ years from platform build-out to day-2 ops; automate
+    with Python/Go and use AI agents for operational leverage.'
+skill_groups:
+- id: infra
+  label: Infrastructure & Platforms
+  tags:
+  - devops
+  - k8s
+  - linux
+  - scale
+  items:
+  - Docker, Docker Compose, Podman, Kubernetes
+  - OpenStack, Proxmox (PVE), KVM, Xen → Proxmox host migrations
+  - 'Bare-metal bring-up: PXE configs in Salt pillars, host base→full→prod switchover'
+  - Linux administration (Debian/Ubuntu/RHEL), systemd units & timers, apt/aptly package
+    pinning
+  - 'High availability: Keepalived, Corosync, Patroni, Consul, Envoy, HAProxy, LB
+    pairs + arbiters'
+  - 'IAM / identity: Keycloak, OpenLDAP (custom Salt formula, ca-ldap estate resetup
+    & formula switchover)'
+  - 'Geographically / multi-estate production fleets (600+ hosts, 3 sites: MSK / SPB
+    / ADMAN + DEAC)'
+- id: networking
+  label: Network & Edge
+  tags:
+  - networking
+  - linux
+  - devops
+  items:
+  - 'Dynamic routing: BIRD, OSPF, tunnel weights and failover'
+  - 'Overlay & VPN: WireGuard, IPsec, GRE, IPIP, VXLAN, OpenConnect'
+  - 'L2/L3 segmentation: VLANs, subnets, ipset + iptables firewall management'
+  - 'DHCP & NAC: Kea DHCP (HA pair, ctrl-agent), FreeRADIUS + LDAP/EAP-MSCHAPv2,
+    OpenLDAP'
+  - 'DNS: recursor zones/forwarding, split-horizon access lists'
+  - 'Edge/proxy: nginx & Angie (vhosts, HTTP/2, upstream balancers, SSL termination),
+    Squid forward proxies, CloudFront proxy tier'
+  - 'Firewall & ACL hygiene: iptables/ipset cross-VLAN rules, service-to-service
+    allowlists, external exposure lockdown (ADV / attendant / BI paths)'
+  - 'Network device automation: Oxidized (config backup to Git + Ceph, OAuth2, DB-backed
+    inventory)'
+  - 'IPAM / CMDB: NetBox, documented addressing and host naming conventions'
+- id: cloud
+  label: Cloud & IaC
+  tags:
+  - cloud
+  - iac
+  - devops
+  items:
+  - AWS, Yandex Cloud
+  - Terraform, Ansible, SaltStack (pillars/roles/nodegroups, Jinja templating)
+  - S3 workflows, environment parity (staging ↔ production), staged prod switchover
+    per host
+  - Ceph object storage for backups (MongoDB / Oxidized / AWS backup jobs)
+- id: cicd_obs
+  label: CI/CD, GitOps & Observability
+  tags:
+  - cicd
+  - gitops
+  - observability
+  - devops
+  items:
+  - GitLab CI (shared runners fleet), Jenkins (agents, pipelines, timers), TeamCity,
+    GitHub Actions
+  - 'Artifact & package repos: JFrog Artifactory (Salt templates, cleanup, estate
+    switchover/decommission), aptly'
+  - Prometheus, Grafana, Zabbix, VictoriaMetrics + vmalert, Vector, Graylog, Datadog,
+    InfluxDB
+  - 'Datadog + Kafka: topic provisioning, consumer-group monitoring (BI / casino /
+    stage-physics pipelines)'
+  - 'Exporters: smartctl, memcached, Cassandra cluster, Java heap, blackbox; Postgres
+    monitoring'
+  - 'Alert design: SMART/disk, read-only filesystem, memcache, SSL expiry, minion-down,
+    highstate duration'
+  - 'Config-drift & hygiene: template blacklists, unattended-upgrades control, log
+    rotation, Gradle/CI cache cleanup timers'
+  - Alerting, recovery playbooks, root-cause oriented ops
+- id: data
+  label: Data & Datastores
+  tags:
+  - database
+  - devops
+  items:
+  - PostgreSQL, MySQL, Patroni
+  - MongoDB (replica set + arbiter, backup to Ceph), Cassandra (clusters, archiving,
+    monitoring)
+  - Redis (streams tuning, access blacklists), Memcached (cluster rebuilds, HA migration)
+  - 'Streaming & BI: Kafka (topics, consumer groups), Trino, ClickHouse, Tableau,
+    Metabase'
+  - 'Analytics platforms: Apache Impala / Cloudera (network & ACL integration), Airflow
+    migrations'
+  - Elasticsearch / OpenSearch (stage + prod casino clusters, cert lifecycle), Manticore
+    Search, RabbitMQ
+- id: programming
+  label: Automation & Programming
+  tags:
+  - programming
+  - automation
+  - ai
+  items:
+  - Python (FastAPI, asyncio), Go, Bash
+  - TypeScript / React / Vite
+  - 'Jinja/YAML at scale: custom Salt formulas, role/state authoring, declarative
+    node definitions'
+  - 'AI tooling: llama.cpp, LLM agents, agentic pipelines'
+- id: video_ai
+  label: Video / AI
+  tags:
+  - ai
+  - video
+  - niche
+  items:
+  - FFmpeg, H.264/H.265, Whisper, Silero, GigaAM
+  - Self-hosted LLM/TTS, GPU inference, NSFW moderation
+  - Media transcoding fleets (media-conv / img-conv / photonews-conv converter roles)
+  - FCP7 XML, Adobe CEP
+- id: ops_practice
+  label: Operational Practice
+  tags:
+  - devops
+  - reliability
+  - process
+  items:
+  - 'Legacy decommissioning programs (Xen estate, LVS, jenkins slaves, converters):
+    40+ hosts retired'
+  - 'Change management via Git: MR-based review, cherry-pick hotfix flow, ticket-linked
+    commits'
+  - 'Access & security: sudo/roles model, service accounts, Keycloak, OpenLDAP,
+    acme.sh/Let''s Encrypt cert manager, VLAN-scoped ACLs'
+  - 'TLS ops: nginx/OpenSearch/Graylog cert reload & staging SSL cutovers (casino
+    APIs, BI edge)'
+  - Backups & restore drills, deploy-user and key hygiene, environment tagging (base
+    → full pillar → prod env)
+  - 'Lifecycle at scale: host/service decommission (KVM, LDAP, Artifactory, GitLab,
+    Airflow, Influx, relays), cherry-pick hotfix delivery'
+- id: languages
+  label: Languages
+  tags:
+  - languages
+  items:
+  - English (Professional), Russian (Native)
+jobs:
+- id: funflow
+  company: FunFlow
+  meta: "(Russia)"
+  role: DevOps / MLOps Engineer
+  dates: 2024 – Present
+  tags:
+  - devops
+  - scale
+  - k8s
+  - observability
+  - database
+  - ai
+  bullets:
+  - id: funflow_salt
+    tags:
+    - scale
+    - linux
+    - iac
+    - devops
+    text: "Inherited two diverging Salt pillar estates where host config was hard to
+      review and easy to drift. Owned and unified management of 600+ hosts across 3
+      sites (80 roles, 480+ states, 607 node definitions spanning Proxmox/KVM, PostgreSQL,
+      Trino/ClickHouse, Keycloak, Graylog/Vector, Zabbix) and authored 25+ production
+      roles (memcache, media converters, Rocket.Chat, Cassandra, backups, monitoring,
+      deploy). Landed 140+ commits (~5k lines / 400+ file touches) so infra changes
+      ship as reviewed code instead of one-off SSH edits."
+  - id: funflow_migrations
+    tags:
+    - reliability
+    - linux
+    - devops
+    text: "Platform carried overlapping HA stacks and a long tail of Xen/LVS/converter
+      debt that raised ops cost and failure modes. Migrated Memcached Corosync → Keepalived
+      across 10 nodes, Docker → Podman, and Xen → Proxmox (incl. cpupower-tuned app
+      nodes), then retired 40+ legacy hosts. Added randomized salt-minion restart timers,
+      SMART/RO-fs alerting and recovery playbooks so remaining fleet stays operable
+      without surprise regressions."
+  - id: funflow_delivery_flow
+    tags:
+    - iac
+    - cicd
+    - process
+    - devops
+    text: "New hosts used to land via bespoke pillar edits with weak review and painful
+      hotfixes. Standardized base pillar → full pillar → prod-env switchover with MR
+      review, ticket-linked commits and cherry-pick hotfix flow. Onboarding became a
+      reproducible pipeline and infra changes are reviewable like application code."
+  - id: funflow_platform
+    tags:
+    - cicd
+    - observability
+    - database
+    - devops
+    text: "CI/CD and data platforms were fragmented across aging Jenkins slaves, mixed
+      artifact repos and loosely monitored Kafka/BI paths. Refactored Jenkins (pinned
+      Java 17/21/25 agents, Rocket.Chat build pipeline, legacy slaves retired), ran
+      GitLab CI runner fleet / TeamCity / Artifactory switchover, and wired Kafka topic
+      provisioning plus Datadog consumer-group monitoring for BI/casino pipelines.
+      Kept OpenSearch, ClickHouse, Trino, Metabase/Tableau, PostgreSQL/MySQL and the
+      Datadog/Zabbix/VictoriaMetrics/Vector stack production-ready for product teams."
+  - id: funflow_observability
+    tags:
+    - observability
+    - reliability
+    - devops
+    text: "Fleet issues (disk failure, RO filesystems, stuck highstates, silent minion
+      loss) were often discovered late via tickets. Authored vmalert rule sets in Salt
+      (Cassandra, memcache, RO-fs, smartctl, disk filters), shipped exporters for smartctl/
+      memcached/Cassandra/Java heap, and added highstate-duration + minion-down signals
+      plus Graylog inputs for new services — config drift and hardware risk became alerts
+      instead of outages."
+  - id: funflow_network
+    tags:
+    - networking
+    - linux
+    - devops
+    text: "Multi-site growth needed safer segmentation and recoverable edge without
+      slowing product delivery. Fixed BIRD/OSPF tunnel weights/failover, rolled out
+      VLAN 220 with ipset/iptables cross-VLAN ACLs, stood up Kea DHCP (HA) + FreeRADIUS/
+      LDAP and split-horizon dns-recursor for ADMAN, and automated router backup via
+      Oxidized → Git/Ceph. Hardened nginx/Angie + Squid/CloudFront edge (incl. HTTP/2
+      on streaming nodes) so east-west and public exposure stay explicit and auditable."
+  - id: funflow_services
+    tags:
+    - devops
+    - product
+    - database
+    text: "Product needed collaboration, media and internal tools without waiting on
+      SaaS lead times or uncontrolled snowflake hosts. Took Rocket.Chat (HA MongoDB +
+      arbiter), Jitsi/Prosody, image-analyze + Elasticsearch, stats-receiver fleet,
+      media-converter farm, NetBox, Growi and aptly to production with monitoring and
+      lifecycle cleanup — teams got working services instead of DIY infra."
+  - id: funflow_llm
+    tags:
+    - ai
+    - gpu
+    - automation
+    text: "LLM inference on the GPU fleet was too slow for concurrent long-context
+      product workloads. Deployed llama.cpp (`llama-server`) on 2× RTX 3080 Ti + 4×
+      Tesla V100 and tuned flash attention, quantized KV cache and mlock — throughput
+      32.4 → 74.8 tok/s with two concurrent 262K-token contexts, enabling self-hosted
+      AI features without a per-token cloud bill."
+  - id: funflow_moderation
+    tags:
+    - ai
+    - product
+    text: "Chat/media moderation depended on a large human team and external tooling,
+      which did not scale with content volume. Brought NSFW moderation (text + image)
+      fully in-house on self-hosted models and cut the moderation team 50 → 20 while
+      keeping review inside the company's own infra boundary."
+  - id: funflow_tts
+    tags:
+    - ai
+    - product
+    text: "In-app voiceover needed predictable latency and no per-minute SaaS spend
+      or data egress. Deployed self-hosted TTS engines on the same GPU/ops model as
+      other AI services so product could ship voice features under internal cost and
+      compliance control."
+- id: parttime
+  company: Part-time Engineering
+  meta: "(remote)"
+  role: ML Infrastructure
+  dates: 2021 – Present
+  tags:
+  - k8s
+  - cloud
+  - iac
+  - cicd
+  - devops
+  - ai
+  bullets:
+  - id: parttime_kiosks
+    tags:
+    - reliability
+    - scale
+    - devops
+    text: "A distributed AI video-analytics product needed always-on edge inference
+      without a large ops team. Run production for 12 kiosks (app.plai.tennis) and 5
+      GPU training servers — availability, inference tuning, capacity and on-call —
+      so the product stays live while models keep training."
+  - id: parttime_k8s
+    tags:
+    - k8s
+    - cloud
+    - iac
+    - cicd
+    - devops
+    text: "Staging and production used to diverge, making releases and restores risky.
+      Built Kubernetes + Terraform CI/CD with genuine staging↔production parity, S3-based
+      backup/restore workflows and environment tagging discipline — every change arrives
+      as a reviewed MR and restore paths are drillable."
+  - id: parttime_neurocut
+    tags:
+    - ai
+    - product
+    text: "Applied the same delivery discipline to my own product NeuroCut: Dockerized
+      agentic video pipeline with GitHub Actions and Prometheus metrics (see Projects)
+      — proving the infra patterns work beyond client estates."
+- id: rustack
+  company: Rustack (Iteco)
+  meta: "(Russia) — *cloud / virtualization provider*"
+  role: Virtualization Systems Engineer
+  dates: 2023 – 2024
+  tags:
+  - cloud
+  - linux
+  - iac
+  - cicd
+  - networking
+  - devops
+  bullets:
+  - id: rustack_openstack
+    tags:
+    - cloud
+    - linux
+    - networking
+    - iac
+    - cicd
+    - database
+    text: "The company needed a multi-tenant virtualization platform sold as a service,
+      not a lab stack. Designed OpenStack with explicit failure domains — Patroni for
+      PostgreSQL HA, GlusterFS for shared storage, Consul for discovery, Envoy at the
+      edge — and automated provisioning end-to-end with Ansible/Python plus GitLab CI/CD
+      and runbooks so day-2 tenant networking, upgrades and incidents matched SLA-shaped
+      \"done\"."
+- id: thprom
+  company: Thprom
+  meta: "(Russia) — *industrial / enterprise IT*"
+  role: IT Infrastructure Specialist → Tech Lead
+  dates: 2019 – 2023
+  tags:
+  - devops
+  - observability
+  - linux
+  bullets:
+  - id: thprom_lead
+    tags:
+    - devops
+    - observability
+    - linux
+    text: "The business needed an in-house document management system but lacked a
+      coherent platform layer. Grew from hands-on admin to tech lead and owned the stack
+      from virtualization/Docker/Podman through FreeIPA, GitLab, Nextcloud and Rocket.Chat,
+      with Zabbix/Prometheus/Grafana monitoring — shipped the product on foundations
+      (HA, backups, TLS, CI, change review) still used at fleet scale later."
+projects:
+- id: neurocut
+  name: NeuroCut
+  blurb: AI video editing assistant
+  link: https://github.com/jdmarshall95/neurocut
+  link_label: github.com/jdmarshall95/neurocut
+  stack: Python, FastAPI, React, FFmpeg, Whisper, Silero, GigaAM, Google Gemini, Docker,
+    Adobe CEP
+  tags:
+  - ai
+  - product
+  bullets:
+  - id: neurocut_pipeline
+    tags:
+    - ai
+    text: "Manual rough cuts from raw footage plus a brief took hours and forced cloud
+      uploads. Built an agentic pipeline (Whisper → LLM edit plan → FFmpeg) that outputs
+      FCP7 XML or MP4 with burned-in subtitles — editors get a usable cut without leaving
+      their local media path."
+  - id: neurocut_perf
+    tags:
+    - ai
+    text: "Editors need sub-minute feedback on short-form sources, not overnight batch
+      jobs. Tuned the pipeline to ~30 s e2e for a 2-minute source (median 17 s) with
+      Whisper large-v3 up to 9× realtime on one 8 GB GPU — rough-cut time drops from
+      hours to seconds."
+  - id: neurocut_delivery
+    tags:
+    - cicd
+    - observability
+    text: "Cloud-only editors break the workflow when media must stay local. Shipped a
+      Premiere Pro CEP plugin against a local path, with NVIDIA inference, Prometheus
+      metrics, GitHub Actions and Docker — productionized the tool instead of leaving
+      it as a notebook demo."
+- id: atenboro
+  name: Atenboro Nav
+  blurb: motorcycle navigation HUD
+  link: https://github.com/jdmarshall95/atenboro-nav
+  link_label: github.com/jdmarshall95/atenboro-nav
+  stack: Android (Kotlin/Java), ESP8266 (PlatformIO), 2GIS Dashboard AIDL, GitHub
+    Actions · MIT, release 1.0.10
+  tags:
+  - mobile
+  - product
+  bullets:
+  - id: atenboro_solo
+    tags:
+    - product
+    text: "Motorcycle navigation forces eyes off the road when the phone is mounted
+      on the bars. Built a solo end-to-end HUD (Android 2GIS proxy, ESP8266 firmware,
+      protocol, docs) so maneuvers, distance and speed cameras show on a handlebar OLED
+      while the phone stays in the pocket — shipped MIT release 1.0.10."
+education:
+- id: bmstu
+  text: "**Bauman Moscow State Technical University (BMSTU)** — *Information Security
+    of Telecommunication Systems*"
