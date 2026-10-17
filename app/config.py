@@ -219,7 +219,10 @@ class Settings(BaseSettings):
 
     # --- Runtime ---
     timezone: str = "Europe/Moscow"
-    db_path: str = "data/jobhunter.db"
+    #: MongoDB connection string (see docker-compose.yml). ``mongomock://`` runs
+    #: the whole app against an in-memory store, no server needed.
+    mongo_uri: str = "mongodb://localhost:27017"
+    mongo_db: str = "jobhunter"
     backup_dir: str = "data/backups"
     backup_keep: int = 7
     log_level: str = "INFO"

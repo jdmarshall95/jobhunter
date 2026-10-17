@@ -6,7 +6,7 @@ Jobs
 * ``digest``        — cron at ``DIGEST_TIME`` (09:00 by default).
 * ``weekly``        — Monday morning weekly report.
 * ``followups``     — reminders for vacancies sitting in ``applied`` for N days.
-* ``backup``        — daily SQLite copy with rotation.
+* ``backup``        — daily MongoDB snapshot with rotation.
 
 The scheduler never raises into the caller: every job is wrapped so that one
 bad run cannot kill the loop (ТЗ §8 «устойчивость»).
@@ -184,9 +184,9 @@ class Scheduler:
         log.info("follow-up reminders sent: %d", min(len(rows), 5))
 
     async def daily_backup(self) -> None:
-        path = self.ctx.db.backup(self.settings.backup_dir, self.settings.backup_keep)
+        path = await self.ctx.db.backup(self.settings.backup_dir, self.settings.backup_keep)
         if path is not None:
-            log.info("sqlite backup: %s", path)
+            log.info("mongo backup: %s", path)
 
     # ----------------------------------------------------------------- helpers
     async def _send_alerts(self, summary: RunSummary) -> None:

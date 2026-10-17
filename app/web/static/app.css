@@ -345,6 +345,8 @@ button, input, select {
   padding-bottom: 0.3rem;
 }
 .mono { font-family: var(--mono); }
+.delta-pos { color: var(--good); }
+.delta-neg { color: var(--danger); }
 .desc {
   white-space: pre-wrap;
   font-family: var(--font);

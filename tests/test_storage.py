@@ -1,4 +1,4 @@
-"""SQLite-слой: upsert/дедупликация, статусы, выборки, health источников, kv."""
+"""Mongo-слой: upsert/дедупликация, статусы, выборки, health источников, kv."""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class TestUpsert:
 
         row = await db.get_job(make_job().id)
         assert row is not None
-        assert row["sources"] == '["gh", "remoteok"]'
+        assert row["sources"] == ["gh", "remoteok"]
         assert await db.count_jobs() == 1
 
     async def test_update_preserves_status_and_first_seen(self, db: Database) -> None:
@@ -154,12 +154,11 @@ class TestListJobs:
 
     async def test_since_days_excludes_old(self, db: Database) -> None:
         # ``upsert_job`` always stamps first_seen_at=now on INSERT, so the stale row
-        # is produced the way a backfill would: by rewriting the column itself.
+        # is produced the way a backfill would: by rewriting the field itself.
         old = make_job(title="DevOps old", url="https://old.io/1")
         await db.upsert_job(old)
         long_ago = (datetime.now(tz=UTC) - timedelta(days=40)).isoformat(timespec="seconds")
-        await db.db.execute("UPDATE jobs SET first_seen_at=? WHERE id=?", (long_ago, old.id))
-        await db.db.commit()
+        await db.set_first_seen(old.id, long_ago)
         fresh = await seed(db, title="DevOps fresh", url="https://fresh.io/1")
 
         rows = await db.list_jobs(since_days=7)
@@ -262,7 +261,7 @@ class TestBackup:
     async def test_creates_file(self, db: Database, tmp_path: Any) -> None:
         await seed(db)
 
-        path = db.backup(tmp_path / "backups", keep=3)
+        path = await db.backup(tmp_path / "backups", keep=3)
 
         assert path is not None
         assert path.exists()
@@ -273,20 +272,25 @@ class TestBackup:
         backups_dir = tmp_path / "backups"
 
         for _ in range(5):
-            db.backup(backups_dir, keep=2)
+            await db.backup(backups_dir, keep=2)
 
-        assert len(list(backups_dir.glob("*.db"))) <= 2
+        assert len(list(backups_dir.glob("*.json"))) <= 2
 
 
 class TestLifecycle:
     async def test_reopen_keeps_data(self, tmp_path: Any) -> None:
-        store = Database(tmp_path / "reopen.db")
+        from mongomock_motor import AsyncMongoMockClient
+
+        # One shared in-memory store stands in for a persistent server.
+        client = AsyncMongoMockClient()
+
+        store = Database(client=client, db_name="reopen")
         await store.connect()
         job = make_job()
         await store.upsert_job(job)
         await store.close()
 
-        again = Database(tmp_path / "reopen.db")
+        again = Database(client=client, db_name="reopen")
         await again.connect()
         row = await again.get_job(job.id)
         await again.close()

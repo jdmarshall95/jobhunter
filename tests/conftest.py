@@ -37,7 +37,8 @@ def settings(tmp_path: Any) -> Settings:
         telegram_bot_token="1234:TEST",
         telegram_chat_id=str(OWNER),
         gemini_api_key="",
-        db_path=str(tmp_path / "jobhunter.db"),
+        mongo_uri="mongomock://",
+        mongo_db="jobhunter_test",
         backup_dir=str(tmp_path / "backups"),
         domain_min_interval=0.0,
         http_max_retries=1,
@@ -102,7 +103,8 @@ def good_raw() -> RawJob:
 # ------------------------------------------------------------------ database
 @pytest.fixture
 async def db(tmp_path: Any) -> Any:
-    store = Database(tmp_path / "test.db")
+    """In-memory MongoDB (mongomock); every client gets its own isolated store."""
+    store = Database("mongomock://", db_name="jobhunter_test")
     await store.connect()
     yield store
     await store.close()

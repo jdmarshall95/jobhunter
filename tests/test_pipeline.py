@@ -235,7 +235,7 @@ class TestRunCounters:
         assert len(summary.new_ids) == 1
 
         row = await db.get_job(summary.new_ids[0])
-        assert json.loads(row["sources"]) == ["gh", "ashby"]
+        assert row["sources"] == ["gh", "ashby"]
         assert row["score"] == pytest.approx(68.5)
 
     async def test_second_run_adds_nothing_new(
@@ -314,9 +314,9 @@ class TestFilterFlagsReachTheCard:
         summary = await pipe.run()
 
         row = await db.get_job(summary.new_ids[0])
-        flags = json.loads(row["flags"])
+        flags = row["flags"]
         assert "гео-ограничение" in flags
-        assert row["geo_restricted"] == 1
+        assert row["geo_restricted"] is True
 
     async def test_scam_flag_is_set_by_the_scorer(
         self, pipeline_factory: Any, db: Database
@@ -326,8 +326,8 @@ class TestFilterFlagsReachTheCard:
         ).run()
 
         row = await db.get_job(summary.new_ids[0])
-        assert row["suspicious"] == 1
-        assert "suspicious" in json.loads(row["flags"])
+        assert row["suspicious"] is True
+        assert "suspicious" in row["flags"]
 
 
 class TestLearnedState:

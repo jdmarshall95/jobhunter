@@ -1,23 +1,47 @@
 # jobhunter — развёртывание «из коробки» (ТЗ §3, §8).
 #
-#   cp .env.example .env          # или использовать ../.env как есть
+#   cp .env.example .env          # или использовать .env рядом с репозиторием
 #   docker compose up -d --build
 #
-# Секреты берутся из ../.env (он лежит рядом с репозиторием), БД — в ./data.
+# Секреты берутся из .env, данные — в контейнере mongo (именованный volume).
 services:
+  mongo:
+    image: mongo:7
+    container_name: jobhunter-mongo
+    restart: unless-stopped
+    # Именованный volume вместо bind-mount: именно bind-mount ./data на macOS
+    # ломал WAL у SQLite. Здесь файловая система внутри контейнера.
+    volumes:
+      - mongo-data:/data/db
+    # Наружу не торчим: доступ только из сети compose.
+    expose:
+      - "27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      com.jobhunter.description: "MongoDB storage for jobhunter"
+
   jobhunter:
     build: .
     image: jobhunter:0.1.0
     container_name: jobhunter
     env_file:
-      - ../.env
+      - .env
     environment:
       TZ: Europe/Moscow
-      # внутри контейнера БД и бэкапы лежат в примонтированном томе
-      DB_PATH: data/jobhunter.db
+      MONGO_URI: mongodb://mongo:27017
+      MONGO_DB: jobhunter
+      # снапшоты БД пишутся в примонтированный том
       BACKUP_DIR: data/backups
     volumes:
       - ./data:/app/data
+    depends_on:
+      mongo:
+        condition: service_healthy
     # 8080/8081/8082 на хосте уже заняты другими сервисами,
     # наружу отдаём 8090 (переопределяется через HEALTHZ_HOST_PORT)
     ports:
@@ -25,3 +49,6 @@ services:
     restart: unless-stopped
     labels:
       com.jobhunter.description: "Vacancy hunter + Telegram bot + web UI"
+
+volumes:
+  mongo-data:

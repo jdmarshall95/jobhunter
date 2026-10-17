@@ -13,7 +13,7 @@ from tests.conftest import make_job
 
 @pytest.fixture
 async def db(tmp_path: object) -> Database:
-    database = Database(tmp_path / "web.db")  # type: ignore[operator]
+    database = Database("mongomock://", db_name="jobhunter_web")
     await database.connect()
     job = make_job(
         company="Reelful",
@@ -31,7 +31,7 @@ async def db(tmp_path: object) -> Database:
 def settings(tmp_path: object) -> Settings:
     return Settings(
         telegram_enabled=False,
-        db_path=str(tmp_path / "unused.db"),  # type: ignore[operator]
+        mongo_uri="mongomock://",
         web_enabled=True,
         web_token="",
     )
@@ -87,7 +87,7 @@ async def test_channel_filter_and_status_change(db: Database, settings: Settings
 async def test_web_token_gate(db: Database, tmp_path: object) -> None:
     settings = Settings(
         telegram_enabled=False,
-        db_path=str(tmp_path / "unused.db"),
+        mongo_uri="mongomock://",
         web_token="secret",
     )
     app = create_web_app(db=db, settings=settings)

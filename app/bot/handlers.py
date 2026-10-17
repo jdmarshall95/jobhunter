@@ -100,7 +100,7 @@ async def resolve_job(db: Database, token: str) -> Any | None:
 
 
 def _col(row: Any, name: str, default: str = "") -> str:
-    """Safe column read: ``sqlite3.Row`` raises ``IndexError`` on absent columns."""
+    """Safe field read: Mongo documents raise ``KeyError`` on absent fields."""
     try:
         value = row[name]
     except (IndexError, KeyError, TypeError):

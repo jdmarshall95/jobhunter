@@ -88,9 +88,9 @@ def _json_pairs(value: object) -> list[tuple[str, float]]:
 
 
 def _get(obj: Any, name: str, default: Any = None) -> Any:
-    if isinstance(obj, dict):
+    if isinstance(obj, dict):  # Mongo documents come back as plain dicts
         return obj.get(name, default)
-    try:  # sqlite3.Row
+    try:  # any other mapping
         keys = obj.keys()  # type: ignore[attr-defined]
     except AttributeError:
         return getattr(obj, name, default)
@@ -102,7 +102,7 @@ def _as_bool(value: object) -> bool:
 
 
 def job_view(obj: Any) -> JobView:
-    """Build a :class:`JobView` from a ``sqlite3.Row``, a dict or a :class:`Job`."""
+    """Build a :class:`JobView` from a Mongo document, a dict or a :class:`Job`."""
     if isinstance(obj, Job):
         return JobView(
             id=obj.id,

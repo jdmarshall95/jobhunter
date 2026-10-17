@@ -3,7 +3,7 @@
 Usage
 -----
     python -m app.main --once          # one pipeline run, then exit
-    python -m app.main --dry-run       # run everything but do not write to SQLite
+    python -m app.main --dry-run       # run everything but do not write to MongoDB
     python -m app.main                 # bot + scheduler + web UI (what Docker runs)
 
 Responsibilities: load config, connect storage, register secrets with the log
@@ -96,7 +96,7 @@ class App:
 def build_app(settings: Settings, *, llm_enabled: bool = True) -> App:
     """Create the object graph (DB stays closed until :meth:`App.prepare`)."""
     profile = load_profile()
-    db = Database(settings.db_path)
+    db = Database(settings.mongo_uri, db_name=settings.mongo_db)
     pipeline = Pipeline(settings, profile, db)
     sender = Sender(api=None)
     ctx = BotCtx(
@@ -194,7 +194,7 @@ async def run_once(settings: Settings, *, dry_run: bool) -> int:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="jobhunter", description="Vacancy hunter + Telegram bot")
     parser.add_argument("--once", action="store_true", help="run the pipeline once and exit")
-    parser.add_argument("--dry-run", action="store_true", help="do not write to SQLite")
+    parser.add_argument("--dry-run", action="store_true", help="do not write to MongoDB")
     parser.add_argument("--no-bot", action="store_true", help="scheduler only, no Telegram polling")
     parser.add_argument("--no-llm", action="store_true", help="ignore the LLM key for this run")
     parser.add_argument("--print-config", action="store_true", help="dump resolved config and exit")
@@ -210,7 +210,10 @@ def main(argv: list[str] | None = None) -> int:
     register_secret(settings.web_token)
 
     if args.print_config:
-        print(f"tz={settings.timezone} db={settings.db_path} digest={settings.digest_time}")
+        print(
+            f"tz={settings.timezone} mongo={settings.mongo_uri}/{settings.mongo_db} "
+            f"digest={settings.digest_time}"
+        )
         print(f"llm={'on' if settings.llm_available else 'off'} tg={settings.telegram_available}")
         print(f"web={'on' if settings.web_enabled else 'off'} port={settings.healthz_port}")
         print(f"owners={sorted(settings.owner_chat_ids())}")

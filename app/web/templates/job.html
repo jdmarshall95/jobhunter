@@ -28,7 +28,10 @@
     <h2>скоринг</h2>
     <ul class="breakdown">
       {% for label, pts in job.score_breakdown %}
-        <li><span>{{ label }}</span><span class="mono">{{ '%+.1f'|format(pts) }}</span></li>
+        <li>
+          <span>{{ label }}</span>
+          <span class="mono {% if pts > 0 %}delta-pos{% elif pts < 0 %}delta-neg{% endif %}">{{ '%+.1f'|format(pts) }}</span>
+        </li>
       {% endfor %}
     </ul>
   </section>

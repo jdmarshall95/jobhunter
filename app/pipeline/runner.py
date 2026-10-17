@@ -6,7 +6,7 @@ Design notes
   ``source_health`` and never aborts the run (ТЗ §5).
 * The LLM step is strictly additive — when there is no API key or the daily
   budget is spent, the rule-based score is what the user sees (ТЗ §6).
-* ``dry_run`` performs every step except writing to SQLite, so ``--dry-run``
+* ``dry_run`` performs every step except writing to the database, so ``--dry-run``
   is a safe smoke test on a production database.
 """
 

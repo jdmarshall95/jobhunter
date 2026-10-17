@@ -4,7 +4,7 @@
 **Middle/Senior DevOps / SRE / Platform Engineer**, удалённо, крипто/web3/fintech, от $3–4k net.
 
 Полностью автономен: ходит по ATS и агрегаторам, нормализует, дедуплицирует, фильтрует,
-оценивает (0–100 с прозрачной раскладкой), складывает в SQLite и присылает карточки в Telegram.
+оценивает (0–100 с прозрачной раскладкой), складывает в MongoDB и присылает карточки в Telegram.
 Работает **без LLM-ключа** (Gemini — опция, только перескор и черновики откликов).
 
 ---
@@ -32,6 +32,10 @@ docker compose ps                # STATUS: healthy
 `WEB_TOKEN` в `.env` — без токена интерфейс открыт (удобно локально).
 
 ### Без Docker (локальная разработка)
+
+Нужен MongoDB-сервер (`mongodb://localhost:27017`). Если сервера нет — поставьте
+`MONGO_URI=mongomock://`, приложение целиком работает на in-memory-хранилище
+(данные после рестарта теряются).
 
 ```bash
 cd jobhunter
@@ -63,7 +67,7 @@ jobhunter/
 │   ├── pipeline/          # normalize → dedup → filters → runner
 │   ├── scoring/           # прозрачный скоринг 0–100 с breakdown
 │   ├── llm/               # Gemini REST + бюджет + кэш по хэшу описания
-│   └── storage/           # SQLite (aiosqlite) + миграции + бэкапы
+│   └── storage/           # MongoDB (motor) + индексы + миграции + бэкапы
 ├── config/profile.yaml    # профиль кандидата, фильтры, веса скоринга
 ├── config/sources.yaml    # источники: kind/token/enabled
 ├── prompts/               # rescore.md, draft.md — системные промпты LLM
@@ -92,7 +96,8 @@ jobhunter/
 | `TG_API_ID`, `TG_API_HASH` | — | нужны только для Telethon (каналы) |
 | `TG_SESSION_PATH` | `data/jobhunter-telethon` | путь `.session`-файла |
 | `TIMEZONE` | `Europe/Moscow` | TZ планировщика |
-| `DB_PATH` | `data/jobhunter.db` | каталог создаётся автоматически |
+| `MONGO_URI` | `mongodb://localhost:27017` | в compose — `mongodb://mongo:27017`; `mongomock://` = in-memory |
+| `MONGO_DB` | `jobhunter` | имя базы |
 | `BACKUP_DIR`, `BACKUP_KEEP` | `data/backups`, `7` | ежедневный бэкап в 03:30 с ротацией |
 | `LOG_LEVEL`, `LOG_JSON` | `INFO`, `false` | `LOG_JSON=true` — JSON-логи для логи-агента |
 | `DIGEST_TIME` | `09:00` | время дайджеста |
@@ -178,7 +183,7 @@ curl -s -o /dev/null -w '%{http_code}\n' \
 ([`app/sources/telegram.py`](app/sources/telegram.py)) — ни сессии, ни `TG_API_ID` не нужны.
 Каналы берутся из `queries` в `sources.yaml` (проверены `devops_vacancies`, `habr_career`,
 `getjob`, `hrlunapark` / [Luna Park](https://t.me/hrlunapark)) и расширяются из бота:
-`/addchannel <имя>` / `/rmchannel <имя>` — список живёт в таблице `kv` и подмешивается перед
+`/addchannel <имя>` / `/rmchannel <имя>` — список живёт в коллекции `kv` и подмешивается перед
 каждым сбором. Для Luna Park парсер читает `tl;dr:` как заголовок и компанию из строки
 вида `Reelful — …`, а превью листается на ~5 страниц (`?before=`), иначе видны только
 последние ~20 постов. Пустой или недоступный канал не валит остальные:
@@ -249,14 +254,26 @@ sudo systemctl daemon-reload && sudo systemctl enable --now jobhunter
 
 ## Бэкапы
 
-Ежедневно в 03:30 планировщик делает снапшот SQLite в `BACKUP_DIR` и держит
-последних `BACKUP_KEEP` (по умолчанию 7). Ручной запуск:
+Сама база живёт в именованном volume `mongo-data` (переживает `docker compose down`
+и `docker compose up --build`). Дополнительно ежедневно в 03:30 планировщик пишет
+JSON-снапшот всех коллекций в `BACKUP_DIR` и держит последних `BACKUP_KEEP`
+(по умолчанию 7). Ручной запуск:
 
 ```bash
-docker compose exec jobhunter python -c \
-  "import asyncio; from app.config import get_settings; from app.storage import Database; \
-   s=get_settings(); d=Database(s.db_path); asyncio.run(d.connect()); \
-   print(d.backup(s.backup_dir, s.backup_keep))"
+docker compose exec jobhunter python -c "
+import asyncio
+from app.config import get_settings
+from app.storage import Database
+
+async def main():
+    s = get_settings()
+    d = Database(s.mongo_uri, db_name=s.mongo_db)
+    await d.connect()
+    print(await d.backup(s.backup_dir, s.backup_keep))
+    await d.close()
+
+asyncio.run(main())
+"
 ```
 
 Файлы лежат в `data/backups/` — том примонтирован наружу, так что бэкапы переживают `docker compose down`.
@@ -267,12 +284,13 @@ docker compose exec jobhunter python -c \
 
 ```bash
 .venv/bin/ruff check .    # All checks passed!
-.venv/bin/pytest -q       # 295 passed
+.venv/bin/pytest -q       # 323 passed
 ```
 
 Покрытие: нормализация (URL/HTML/зарплаты/даты), дедупликация, жёсткие фильтры,
 скоринг с breakdown, все парсеры источников + happy/failure пути `fetch()` через моки,
-`HttpFetcher` (ETag/304, retry, 429, троттлинг по домену), SQLite-слой и
+`HttpFetcher` (ETag/304, retry, 429, троттлинг по домену), Mongo-слой
+(`mongomock-motor`, без реального сервера) и
 обработчики бота, прогнанные через настоящий `Dispatcher` aiogram с фейковой сессией.
 
 ---
