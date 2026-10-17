@@ -6,7 +6,7 @@ from typing import Any
 
 import pytest
 
-from app.models import Job
+from app.models import GeoScope, Job
 from app.scoring.scorer import FxCache, ScoreResult, score_job
 from tests.conftest import make_job
 
@@ -139,6 +139,43 @@ class TestPenalties:
         result = scored(job, profile, negative_signals={"blockchain": 1})
 
         assert all("отклонял" not in label for label, _ in result.breakdown)
+
+    def test_usa_only_takes_the_heavy_penalty(self, profile: Any) -> None:
+        job = make_job(description="DevOps", location="Remote - USA", geo_scope=GeoScope.USA_ONLY)
+
+        result = scored(job, profile)
+
+        assert ("гео: только USA", profile.scoring.penalty_usa_only) in result.breakdown
+
+    def test_city_scoped_remote_is_penalised_lightly(self, profile: Any) -> None:
+        job = make_job(
+            description="DevOps",
+            location="Remote - Singapore",
+            geo_scope=GeoScope.COUNTRY,
+            geo_place="Singapore",
+        )
+
+        result = scored(job, profile)
+
+        assert ("не worldwide remote (Singapore)", profile.scoring.penalty_not_worldwide) in (
+            result.breakdown
+        )
+
+    def test_worldwide_remote_has_no_geo_penalty(self, profile: Any) -> None:
+        job = make_job(description="DevOps", location="Remote", geo_scope=GeoScope.WORLDWIDE)
+
+        labels = [label for label, _ in scored(job, profile).breakdown]
+
+        assert not any("гео" in label or "worldwide" in label for label in labels)
+
+    def test_europe_scope_has_no_geo_penalty(self, profile: Any) -> None:
+        job = make_job(
+            description="DevOps", location="Remote - Warsaw, Poland", geo_scope=GeoScope.EUROPE
+        )
+
+        labels = [label for label, _ in scored(job, profile).breakdown]
+
+        assert not any("гео" in label or "worldwide" in label for label in labels)
 
 
 class TestFxCache:

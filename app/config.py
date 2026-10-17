@@ -157,6 +157,11 @@ class ScoringWeights(BaseModel):
     penalty_residency: float = -6.0
     penalty_scam_suspect: float = -10.0
     geo_restricted: float = -4.0
+    #: "Remote - USA": remote, but the customer cannot apply from Europe.
+    #: Strong on purpose — ``min_score`` decides whether the card survives.
+    penalty_usa_only: float = -30.0
+    #: Remote limited to one country/city or a non-European region.
+    penalty_not_worldwide: float = -12.0
 
 
 class Profile(BaseModel):

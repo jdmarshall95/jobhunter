@@ -15,7 +15,7 @@ from app.config import (
     SalaryExpectation,
     role_matches,
 )
-from app.models import Job
+from app.models import GeoScope, Job
 
 # --------------------------------------------------------------------------- #
 # helpers
@@ -191,6 +191,14 @@ def score_job(
         add("не remote", w.penalty_onsite)
     if job.geo_restricted:
         add("гео-ограничение", w.geo_restricted)
+    # Geo scope: the customer wants *worldwide* remote. A US-only job stays in
+    # the feed but takes a heavy hit; a city/region-scoped one a lighter one.
+    # ``LOCAL`` is already covered by ``penalty_onsite`` above.
+    if job.geo_scope is GeoScope.USA_ONLY:
+        add("гео: только USA", w.penalty_usa_only)
+    elif job.geo_scope in (GeoScope.COUNTRY, GeoScope.REGION):
+        place = job.geo_place or job.location
+        add(f"не worldwide remote ({place})", w.penalty_not_worldwide)
     if any(s in haystack for s in RESIDENCY_SIGNALS):
         add("нужно резидентство/разрешение", w.penalty_residency)
 

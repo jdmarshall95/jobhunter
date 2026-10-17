@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from app.models import GeoScope
 from app.pipeline.filters import FilterOutcome, apply_hard_filters, sanctions_warning
 from tests.conftest import make_job
 
@@ -101,6 +102,26 @@ class TestRemoteOnly:
 
         assert outcome.passed is True
         assert outcome.flags == ["гео-ограничение"]
+
+    def test_usa_only_is_flagged_not_dropped(self, profile: Any) -> None:
+        job = good_job(location="Remote - USA", geo_scope=GeoScope.USA_ONLY)
+
+        outcome = apply_hard_filters(job, profile)
+
+        assert outcome.passed is True
+        assert outcome.flags == ["гео: только USA"]
+
+    def test_city_scoped_remote_is_flagged(self, profile: Any) -> None:
+        job = good_job(location="Remote - Singapore", geo_scope=GeoScope.COUNTRY)
+
+        outcome = apply_hard_filters(job, profile)
+
+        assert outcome.passed is True
+        assert outcome.flags == ["не worldwide remote"]
+
+    def test_worldwide_and_europe_are_not_flagged(self, profile: Any) -> None:
+        for scope in (GeoScope.WORLDWIDE, GeoScope.EUROPE, GeoScope.UNKNOWN):
+            assert apply_hard_filters(good_job(geo_scope=scope), profile).flags == []
 
 
 class TestExcludeKeywords:

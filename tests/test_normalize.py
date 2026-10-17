@@ -7,9 +7,10 @@ from typing import Any
 
 import pytest
 
-from app.models import canonical_url, content_hash
+from app.models import GeoScope, canonical_url, content_hash
 from app.pipeline.normalize import (
     age_days,
+    classify_geo,
     detect_remote,
     normalize,
     parse_posted,
@@ -151,6 +152,63 @@ class TestNormalize:
             make_raw_local(description="Senior DevOps Engineer. Must be located in Germany.")
         )
         assert job.geo_restricted is True
+
+    def test_geo_scope_is_classified(self) -> None:
+        job = normalize(make_raw_local(location="Remote - USA"))
+        assert job.geo_scope is GeoScope.USA_ONLY
+        assert job.geo_place == "USA"
+
+
+class TestClassifyGeo:
+    """«Remote» is not one thing: only worldwide remote is actually available."""
+
+    @pytest.mark.parametrize(
+        ("location", "description", "remote", "expected"),
+        [
+            # worldwide
+            ("Remote", "", True, GeoScope.WORLDWIDE),
+            ("Remote (Worldwide)", "", True, GeoScope.WORLDWIDE),
+            ("Remote - Anywhere", "", True, GeoScope.WORLDWIDE),
+            ("", "DevOps, work from anywhere", True, GeoScope.WORLDWIDE),
+            # USA only
+            ("Remote - USA", "", True, GeoScope.USA_ONLY),
+            ("United States", "", None, GeoScope.USA_ONLY),
+            ("Remote - Austin, TX", "", True, GeoScope.USA_ONLY),
+            ("Remote - Toronto, Canada", "Must be located in the US.", True, GeoScope.USA_ONLY),
+            # Europe is fine for the customer
+            ("Remote - EMEA", "", True, GeoScope.EUROPE),
+            ("Remote - London, UK", "", True, GeoScope.EUROPE),
+            ("Warsaw, Poland", "", None, GeoScope.EUROPE),
+            # broad regions that exclude Europe
+            ("Remote - APAC", "", True, GeoScope.REGION),
+            ("Remote - LATAM", "", True, GeoScope.REGION),
+            # a single country/city is not worldwide
+            ("Remote - Singapore", "", True, GeoScope.COUNTRY),
+            ("Dubai, UAE", "", None, GeoScope.COUNTRY),
+            ("Remote - Toronto, Canada", "", True, GeoScope.COUNTRY),
+            # office job
+            ("Tokyo", "", False, GeoScope.LOCAL),
+            # nothing to go on
+            ("", "", None, GeoScope.UNKNOWN),
+        ],
+    )
+    def test_scopes(
+        self,
+        location: str,
+        description: str,
+        remote: bool | None,
+        expected: GeoScope,
+    ) -> None:
+        assert classify_geo(location, description, remote).scope is expected
+
+    def test_place_skips_the_word_remote(self) -> None:
+        """The card must show the real place, not the "Remote" prefix."""
+        info = classify_geo("Remote - Abu Dhabi, UAE", "", True)
+
+        assert info.place == "Abu Dhabi"
+
+    def test_us_state_abbreviation_beats_a_city_name(self) -> None:
+        assert classify_geo("Remote - New York, NY", "", True).scope is GeoScope.USA_ONLY
 
     def test_remote_falls_back_to_text(self) -> None:
         job = normalize(make_raw_local(description="100% remote, anywhere in the world"))

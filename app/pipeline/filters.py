@@ -14,7 +14,7 @@ from app.config import (
     Profile,
     role_matches,
 )
-from app.models import Job
+from app.models import GeoScope, Job
 
 #: Titles that are clearly not a DevOps/SRE/platform role.
 NON_ROLE_TOKENS = (
@@ -70,11 +70,17 @@ def apply_hard_filters(
         else:
             flags.append(ROLE_MISMATCH_FLAG)
 
-    # 2. Remote-only.
+    # 2. Remote-only + geo scope. A geo-tied vacancy is never dropped here: the
+    # scorer penalises it and ``min_score`` decides, so the customer still sees
+    # *why* a "remote" job looked odd (ТЗ §6).
     if profile.candidate.work_mode == "remote" and job.remote is False:
         reasons.append("не remote")
     if job.geo_restricted:
         flags.append("гео-ограничение")
+    if job.geo_scope is GeoScope.USA_ONLY:
+        flags.append("гео: только USA")
+    elif job.geo_scope in (GeoScope.COUNTRY, GeoScope.REGION):
+        flags.append("не worldwide remote")
 
     # 3. Exclude keywords (title is decisive, body only for strong tokens).
     # Luna Park often lists several roles in one tl;dr («AI, frontend, full-stack

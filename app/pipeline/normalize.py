@@ -7,12 +7,13 @@ geo-restriction detection. No network, no scoring.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from html import unescape
 
 from bs4 import BeautifulSoup
 
-from app.models import Job, RawJob, canonical_url
+from app.models import GeoScope, Job, RawJob, canonical_url
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"[ \t\u00a0]+")
@@ -35,6 +36,213 @@ GEO_RESTRICT_RE = re.compile(
     r"|based in (?:the )?(?:us|usa|united states|uk|eu|europe|germany|netherlands|poland))\b",
     re.IGNORECASE,
 )
+
+# --------------------------------------------------------------------------- #
+# geo scope: "remote" is not one thing
+#
+# The customer lives in Europe and wants *worldwide* remote. An ATS field that
+# says "Remote - USA" (Coinbase lists 134 of them) is a US-only job, and a bare
+# city ("Singapore", "Vienna") is an office job with a remote-ish label. The
+# classifier below reads the location field first (it is short and structured),
+# then falls back to explicit statements in the description.
+# --------------------------------------------------------------------------- #
+
+#: Location strings that mean "work from anywhere".
+WORLDWIDE_TOKENS = ("remote", "worldwide", "world-wide", "anywhere", "global", "distributed")
+
+#: Countries/regions that include the customer's residence -> no penalty.
+EUROPE_TOKENS = (
+    "europe",
+    "european",
+    "emea",
+    "eu",
+    "u.e.",
+    "cet",
+    "gmt",
+    "uk",
+    "u.k.",
+    "united kingdom",
+    "britain",
+    "england",
+    "london",
+    "germany",
+    "berlin",
+    "netherlands",
+    "amsterdam",
+    "poland",
+    "warsaw",
+    "ukraine",
+    "kyiv",
+    "spain",
+    "madrid",
+    "barcelona",
+    "portugal",
+    "lisbon",
+    "italy",
+    "milan",
+    "rome",
+    "austria",
+    "vienna",
+    "czech",
+    "prague",
+    "lithuania",
+    "vilnius",
+    "estonia",
+    "tallinn",
+    "latvia",
+    "riga",
+    "switzerland",
+    "zurich",
+    "france",
+    "paris",
+    "ireland",
+    "dublin",
+    "finland",
+    "helsinki",
+    "sweden",
+    "stockholm",
+    "denmark",
+    "copenhagen",
+    "belgium",
+    "brussels",
+    "romania",
+    "bulgaria",
+    "serbia",
+    "belgrade",
+    "georgia",
+    "tbilisi",
+    "armenia",
+    "yerevan",
+    "cyprus",
+    "limassol",
+    "moldova",
+    "cis",
+    "russia",
+    "moscow",
+)
+
+#: Broad regions that do *not* include Europe.
+REGION_TOKENS = (
+    "apac",
+    "a-pac",
+    "asia",
+    "asian",
+    "pacific",
+    "anzac",
+    "latam",
+    "latin america",
+    "americas",
+    "north america",
+    "south america",
+    "mena",
+    "middle east",
+)
+
+#: The USA in every spelling an ATS board uses, plus US states ("New York, NY").
+USA_TOKENS = frozenset(
+    {
+        "usa", "us", "u.s.", "u.s.a.", "u.s.a", "united states", "u.s. remote",
+        "al", "ak", "az", "ar", "ca", "co", "ct", "de", "fl", "ga", "hi", "id", "il",
+        "in", "ia", "ks", "ky", "la", "me", "md", "ma", "mi", "mn", "ms", "mo", "mt",
+        "ne", "nv", "nh", "nj", "nm", "ny", "nc", "nd", "oh", "ok", "or", "pa", "ri",
+        "sc", "sd", "tn", "tx", "ut", "vt", "va", "wa", "wv", "wi", "wy", "dc",
+    }
+)
+
+#: "must be located in the US", "US only", "based in the United States".
+_USA_STATEMENT_RE = re.compile(
+    r"\b(?:must be (?:located|based) in the (?:us|usa|u\.s\.|united states)"
+    r"|us[- ]only|only in the us|us[- ]based|u\.s\.[- ]based"
+    r"|based in the (?:us|usa|united states)"
+    r"|work(?:ing)? from (?:the )?(?:us|usa|united states))\b",
+    re.IGNORECASE,
+)
+#: "Work from anywhere", "Remote (Worldwide)".
+_WORLDWIDE_STATEMENT_RE = re.compile(
+    r"\b(work from anywhere|anywhere in the world|remote[- ]?worldwide|worldwide remote"
+    r"|remote anywhere|fully remote anywhere)\b",
+    re.IGNORECASE,
+)
+
+#: Location separators used by ATS boards: "Remote - USA", "Abu Dhabi, UAE; KL".
+_LOCATION_SPLIT_RE = re.compile(r"[,;/|()\[\]]+| - | – | — ")
+
+
+@dataclass(frozen=True, slots=True)
+class GeoInfo:
+    """Result of :func:`classify_geo` — a scope plus a human-readable place."""
+
+    scope: GeoScope = GeoScope.UNKNOWN
+    place: str = ""
+
+
+def _place_parts(location: str) -> list[str]:
+    """Location split into comparable fragments, "remote"-ness removed.
+
+    ``"Remote - Abu Dhabi, UAE"`` -> ``["abu dhabi", "uae"]``: the first real
+    place is what the card should show, not the word "Remote".
+    """
+    parts = [p.strip(" -–—") for p in _LOCATION_SPLIT_RE.split((location or "").strip())]
+    return [p for p in parts if p and p.casefold() not in WORLDWIDE_TOKENS]
+
+
+def _place_name(location: str) -> str:
+    """Shortest readable label for a location string ("Abu Dhabi, UAE" -> "Abu Dhabi")."""
+    parts = _place_parts(location)
+    return (parts[0] if parts else "")[:40]
+
+
+def _matches(fragment: str, tokens: frozenset[str] | tuple[str, ...]) -> bool:
+    """Does ``fragment`` mention one of ``tokens`` at word level?
+
+    Two-word keywords ("united states") are matched as a whole fragment, so a
+    city named "Washington" cannot be mistaken for "us".
+    """
+    words = set(fragment.split())
+    for token in tokens:
+        if " " in token:
+            if fragment == token:
+                return True
+        elif token in words:
+            return True
+    return False
+
+
+def classify_geo(location: str, description: str = "", remote: bool | None = None) -> GeoInfo:
+    """Classify how tightly a vacancy is bound to one geography.
+
+    Order matters: an explicit statement in the text ("must be located in the US")
+    beats the ATS field, and a country beats the word "Remote" that usually
+    prefixes it — "Remote - Singapore" is *not* worldwide. When several places are
+    listed, the first one wins ("London, New York" is Europe-friendly).
+    """
+    head = (description or "")[:2000]
+    parts = _place_parts(location)
+
+    if _USA_STATEMENT_RE.search(head):
+        return GeoInfo(GeoScope.USA_ONLY, "USA")
+
+    for fragment in parts:
+        low = fragment.casefold().strip(". ")
+        if _matches(low, USA_TOKENS):
+            return GeoInfo(GeoScope.USA_ONLY, "USA")
+        if _matches(low, EUROPE_TOKENS):
+            return GeoInfo(GeoScope.EUROPE, fragment[:40])
+        if _matches(low, REGION_TOKENS):
+            return GeoInfo(GeoScope.REGION, fragment[:40])
+
+    norm = " ".join(_LOCATION_SPLIT_RE.sub(" ", (location or "").casefold()).split())
+    # "Remote", "Remote - Worldwide", "Anywhere": nothing but remote-ness left.
+    if norm and not (set(norm.split()) - set(WORLDWIDE_TOKENS)):
+        return GeoInfo(GeoScope.WORLDWIDE, "")
+    if remote is not False and _WORLDWIDE_STATEMENT_RE.search(head):
+        return GeoInfo(GeoScope.WORLDWIDE, "")
+
+    if not norm:
+        return GeoInfo(GeoScope.UNKNOWN, "")
+    if remote is False:
+        return GeoInfo(GeoScope.LOCAL, _place_name(location))
+    return GeoInfo(GeoScope.COUNTRY, _place_name(location))
 
 _CURRENCY_SYMBOLS = {"$": "USD", "€": "EUR", "£": "GBP", "₽": "RUB"}
 _CURRENCY_CODES = {"usd", "eur", "gbp", "rub", "uah", "pln", "btc", "eth", "usdt", "usdc"}
@@ -231,6 +439,9 @@ def normalize(raw: RawJob) -> Job:
         sources=[raw.source],
     )
     job.geo_restricted = bool(GEO_RESTRICT_RE.search(description[:2000]))
+    info = classify_geo(location, description, job.remote)
+    job.geo_scope = info.scope
+    job.geo_place = info.place
     return job
 
 
@@ -239,4 +450,13 @@ def age_days(job: Job) -> float:
     return max(0.0, (datetime.now(tz=UTC) - stamp).total_seconds() / 86400)
 
 
-__all__ = ["normalize", "strip_html", "detect_remote", "parse_salary", "parse_posted", "age_days"]
+__all__ = [
+    "normalize",
+    "strip_html",
+    "detect_remote",
+    "parse_salary",
+    "parse_posted",
+    "age_days",
+    "classify_geo",
+    "GeoInfo",
+]

@@ -47,6 +47,30 @@ class RawJob:
     raw: dict[str, Any] = field(default_factory=dict)
 
 
+class GeoScope(StrEnum):
+    """How tightly a vacancy is tied to one geography.
+
+    ``WORLDWIDE`` is what the customer is looking for; everything else stays in
+    the feed but is penalised, because a «remote» job that only hires inside the
+    USA is not really available to someone living in Europe.
+    """
+
+    #: Remote from anywhere ("Remote", "Worldwide", "Anywhere").
+    WORLDWIDE = "worldwide"
+    #: Remote from Europe/CIS — perfectly fine, no penalty.
+    EUROPE = "europe"
+    #: Remote inside a broad region that excludes Europe (APAC / LATAM / MENA).
+    REGION = "region"
+    #: Remote, but tied to a single country or city ("Remote - Singapore").
+    COUNTRY = "country"
+    #: USA-only: the customer cannot apply from Europe.
+    USA_ONLY = "usa_only"
+    #: Not remote at all — an office/hybrid job in a specific city.
+    LOCAL = "local"
+    #: Nothing to go on.
+    UNKNOWN = "unknown"
+
+
 @dataclass(slots=True)
 class Job:
     """Normalised vacancy. ``id`` is a stable content hash, not a DB row id."""
@@ -71,6 +95,10 @@ class Job:
     score_breakdown: list[tuple[str, float]] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
     geo_restricted: bool = False
+    #: How tightly the vacancy is tied to a geography (see :class:`GeoScope`).
+    geo_scope: GeoScope = GeoScope.UNKNOWN
+    #: Short human-readable place label ("USA", "Singapore", "Vienna").
+    geo_place: str = ""
     suspicious: bool = False
     llm_verdict: str = ""
     llm_summary: str = ""

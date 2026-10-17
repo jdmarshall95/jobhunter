@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from html import escape
 from typing import Any
 
-from app.models import Job
+from app.models import GeoScope, Job
 from app.timeutil import to_local
 
 #: Telegram hard limit for a text message.
@@ -52,6 +52,8 @@ class JobView:
     status: str = "new"
     suspicious: bool = False
     geo_restricted: bool = False
+    geo_scope: GeoScope = GeoScope.UNKNOWN
+    geo_place: str = ""
     llm_verdict: str = ""
     llm_summary: str = ""
     posted_text: str = ""
@@ -101,6 +103,14 @@ def _as_bool(value: object) -> bool:
     return bool(value) and str(value) not in ("0", "None", "false")
 
 
+def _as_scope(value: object) -> GeoScope:
+    """Read a stored ``geo_scope`` string back into the enum (old rows: UNKNOWN)."""
+    try:
+        return GeoScope(str(value))
+    except ValueError:
+        return GeoScope.UNKNOWN
+
+
 def job_view(obj: Any) -> JobView:
     """Build a :class:`JobView` from a Mongo document, a dict or a :class:`Job`."""
     if isinstance(obj, Job):
@@ -119,6 +129,8 @@ def job_view(obj: Any) -> JobView:
             status=obj.status,
             suspicious=obj.suspicious,
             geo_restricted=obj.geo_restricted,
+            geo_scope=obj.geo_scope,
+            geo_place=obj.geo_place,
             llm_verdict=obj.llm_verdict,
             llm_summary=obj.llm_summary,
         )
@@ -152,6 +164,8 @@ def job_view(obj: Any) -> JobView:
         status=str(_get(obj, "status", "new") or "new"),
         suspicious=_as_bool(_get(obj, "suspicious", 0)),
         geo_restricted=_as_bool(_get(obj, "geo_restricted", 0)),
+        geo_scope=_as_scope(_get(obj, "geo_scope", "")),
+        geo_place=str(_get(obj, "geo_place", "") or ""),
         llm_verdict=str(_get(obj, "llm_verdict", "") or ""),
         llm_summary=str(_get(obj, "llm_summary", "") or ""),
     )
@@ -192,7 +206,12 @@ def render_card(view: JobView, *, index: str = "", show_breakdown: bool = True) 
         lines.append(breakdown_text(view.breakdown))
 
     notes: list[str] = []
-    if view.geo_restricted:
+    if view.geo_scope is GeoScope.USA_ONLY:
+        notes.append("⚠️ гео: только USA — нужен worldwide remote")
+    elif view.geo_scope in (GeoScope.COUNTRY, GeoScope.REGION):
+        place = esc(view.geo_place or view.location)
+        notes.append(f"⚠️ не worldwide remote ({place})")
+    elif view.geo_restricted:
         notes.append("⚠️ гео-ограничение — уточни в переписке")
     if view.suspicious:
         notes.append("⚠️ похоже на скам-паттерн")
