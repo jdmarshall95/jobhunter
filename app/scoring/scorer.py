@@ -44,13 +44,18 @@ RESIDENCY_SIGNALS = (
     "visa required",
 )
 
-RUSSIAN_SIGNALS = (
-    "russian-speaking",
-    "russian speaking",
-    "русскоязыч",
-    "русский",
-    "cis",
-    "english is a plus",
+#: Signals that the team actually works in Russian, as ``(label, pattern)``.
+#:
+#: They are matched on word boundaries on purpose. The previous version was a
+#: plain substring check, and ``"cis" in text`` fires inside *precision*,
+#: *decision*, *decisions*: 413 of the 1033 stored vacancies "had" a Russian
+#: team that way, so the +8 bonus was noise. ``"english is a plus"`` went the
+#: same way — it says nothing about the working language of the team.
+RUSSIAN_SIGNALS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("russian", re.compile(r"\brussian\b")),
+    ("русский", re.compile(r"русск")),  # русский / русская / русскоязычный
+    ("CIS", re.compile(r"\bcis\b")),
+    ("СНГ", re.compile(r"\bsng\b")),
 )
 
 #: Non-USD monthly figures are converted before comparison with the expectation.
@@ -176,9 +181,9 @@ def score_job(
             add(f"вилка ниже минимума ({detail})", w.salary_below_min)
 
     # --- russian-speaking team (plus-signal, not a filter) --------------
-    ru_hits = [s for s in RUSSIAN_SIGNALS if s in haystack]
-    if ru_hits:
-        add("русскоязычная команда", w.russian_speaking_signal)
+    ru_hit = next((name for name, pat in RUSSIAN_SIGNALS if pat.search(haystack)), "")
+    if ru_hit:
+        add(f"русскоязычная команда: {ru_hit}", w.russian_speaking_signal)
     elif cand.want_russian_speaking_team:
         flags.append("RU-сигнал не найден")
 

@@ -126,6 +126,36 @@ class TestPenalties:
 
         assert "RU-сигнал не найден" in result.flags
 
+    @pytest.mark.parametrize(
+        "description",
+        [
+            "DevOps engineer, high precision pipeline, decisions owned by the team.",
+            "You will need concise communication and an incision-free workflow.",
+            "DevOps role, English is a plus.",
+        ],
+    )
+    def test_ru_signal_is_not_a_substring_match(self, profile: Any, description: str) -> None:
+        """«cis» inside *precision* used to hand out the +8 bonus to everyone."""
+        result = scored(make_job(description=description), profile)
+
+        labels = [label for label, _ in result.breakdown]
+        assert not any("русскоязычная команда" in label for label in labels)
+        assert "RU-сигнал не найден" in result.flags
+
+    @pytest.mark.parametrize(
+        "description",
+        [
+            "DevOps in a russian speaking team, fully remote.",
+            "Работа в русскоязычной команде.",
+            "We are a CIS-based fintech.",
+        ],
+    )
+    def test_ru_signal_recognises_real_mentions(self, profile: Any, description: str) -> None:
+        result = scored(make_job(description=description), profile)
+
+        labels = [label for label, _ in result.breakdown]
+        assert any("русскоязычная команда" in label for label in labels)
+
     def test_repeated_reject_feedback(self, profile: Any) -> None:
         job = make_job(description="DevOps for a blockchain exchange")
 
