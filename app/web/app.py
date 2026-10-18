@@ -51,8 +51,10 @@ STATUS_LABELS = {
     Status.ARCHIVED.value: "архив",
 }
 
-#: The default feed hides the archive unless the user asks for it explicitly.
-FEED_EXCLUDED = [Status.ARCHIVED.value]
+#: The default feed hides the archive and anything the user already dismissed.
+#: ``✕`` sets ``ignored``, so without this the row stayed put after the reload and
+#: the button looked like it did nothing. Both stay reachable via ``?status=…``.
+FEED_EXCLUDED = [Status.IGNORED.value, Status.ARCHIVED.value]
 
 
 def _row_to_dict(row: Any) -> dict[str, Any]:

@@ -148,6 +148,34 @@ async def test_archived_rows_leave_the_default_feed(db: Database, settings: Sett
 
 
 @pytest.mark.asyncio
+async def test_dismissed_row_leaves_the_default_feed(db: Database, settings: Settings) -> None:
+    """``✕`` must make the row disappear on reload, not just relabel it.
+
+    Regression: the redirect worked, but ``ignored`` rows stayed in the default
+    feed, so the button looked like nothing happened.
+    """
+    app = create_web_app(db=db, settings=settings)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        job_id = (await client.get("/api/jobs")).json()["items"][0]["id"]
+
+        await client.post(
+            f"/jobs/{job_id}/status",
+            data={"status": "ignored", "reason": "other", "next": "/"},
+            follow_redirects=False,
+        )
+
+        assert "founding full-stack engineer" not in (await client.get("/")).text
+        assert (await client.get("/api/jobs")).json()["total"] == 0
+
+        # Still reachable when asked for explicitly, and still counted in the funnel.
+        ignored = await client.get("/", params={"status": "ignored"})
+        assert "founding full-stack engineer" in ignored.text
+        funnel = (await client.get("/api/stats")).json()["funnel"]
+        assert funnel["ignored"] == 1
+
+
+@pytest.mark.asyncio
 async def test_web_token_gate(db: Database, tmp_path: object) -> None:
     settings = Settings(
         telegram_enabled=False,
