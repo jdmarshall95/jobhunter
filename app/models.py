@@ -146,6 +146,9 @@ class Status(StrEnum):
     OFFER = "offer"
     REJECTED = "rejected"
     IGNORED = "ignored"
+    #: Out of the funnel without being rejected: a vacancy that aged past
+    #: ``filters.max_age_days`` lands here instead of cluttering the feed.
+    ARCHIVED = "archived"
 
 
 STATUS_ORDER = [
@@ -157,6 +160,7 @@ STATUS_ORDER = [
     Status.OFFER,
     Status.REJECTED,
     Status.IGNORED,
+    Status.ARCHIVED,
 ]
 
 #: Reasons offered by the ❌ button; they feed back into weights/stop-words.

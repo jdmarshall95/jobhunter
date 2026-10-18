@@ -52,6 +52,18 @@ def _since_iso(days: int) -> str:
     return (datetime.now(tz=UTC) - timedelta(days=days)).isoformat(timespec="seconds")
 
 
+def _parse_iso(value: object) -> datetime | None:
+    """Read a stored ISO-8601 timestamp (offsets included) as an aware datetime."""
+    raw = str(value or "").strip().replace("Z", "+00:00")
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
 def _regex(needle: str) -> re.Pattern[str]:
     """Case-insensitive substring match, anchored by ``re.escape``."""
     return re.compile(re.escape(needle), re.IGNORECASE)
@@ -298,6 +310,37 @@ class Database:
             {"$set": {"followup_at": when.isoformat(timespec="seconds"), "updated_at": now_iso()}},
         )
 
+    async def archive_stale(self, *, days: int, statuses: tuple[str, ...] = ("new",)) -> int:
+        """Move rows that aged past ``days`` out of the feed.
+
+        Only untouched (``new`` by default) rows are touched: anything the owner
+        starred or acted on stays where it is. Rows without a publication date
+        are kept — absence of a date is not staleness. Returns how many moved.
+        """
+        if days <= 0:
+            return 0
+        cutoff = datetime.now(tz=UTC) - timedelta(days=days)
+        # ``posted_at`` is an ISO string *with an offset*, so Mongo's string
+        # comparison would be wrong; the age check happens here instead.
+        rows = await self.db["jobs"].find(
+            {"status": {"$in": list(statuses)}, "posted_at": {"$ne": None}},
+            {"posted_at": 1},
+        ).to_list(length=20_000)
+        stale = [
+            row["_id"]
+            for row in rows
+            if (_parse_iso(row.get("posted_at")) or cutoff) < cutoff
+        ]
+        if not stale:
+            return 0
+        stamp = now_iso()
+        res = await self.db["jobs"].update_many(
+            {"_id": {"$in": stale}},
+            {"$set": {"status": "archived", "updated_at": stamp}},
+        )
+        log.info("archived %d stale vacancies (older than %d days)", len(stale), days)
+        return int(res.modified_count)
+
     async def mark_notified(self, job_ids: list[str]) -> None:
         if not job_ids:
             return
@@ -319,6 +362,7 @@ class Database:
     def _filter(
         *,
         statuses: list[str] | None = None,
+        exclude_statuses: list[str] | None = None,
         min_score: float | None = None,
         since_days: int | None = None,
         only_unnotified: bool = False,
@@ -330,6 +374,10 @@ class Database:
         query: dict[str, Any] = {}
         if statuses:
             query["status"] = {"$in": list(statuses)}
+        elif exclude_statuses:
+            # The feed shows "everything except the archive": an explicit
+            # ``statuses`` selection always wins.
+            query["status"] = {"$nin": list(exclude_statuses)}
         if min_score is not None:
             query["score"] = {"$gte": min_score}
         if since_days is not None:
@@ -359,6 +407,7 @@ class Database:
         self,
         *,
         statuses: list[str] | None = None,
+        exclude_statuses: list[str] | None = None,
         min_score: float | None = None,
         since_days: int | None = None,
         only_unnotified: bool = False,
@@ -371,6 +420,7 @@ class Database:
     ) -> list[dict[str, Any]]:
         query = self._filter(
             statuses=statuses,
+            exclude_statuses=exclude_statuses,
             min_score=min_score,
             since_days=since_days,
             only_unnotified=only_unnotified,

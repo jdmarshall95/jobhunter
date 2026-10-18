@@ -45,7 +45,7 @@ from app.bot.render import (
 from app.bot.sender import Sender
 from app.config import Profile, Settings
 from app.logging_setup import get_logger
-from app.models import REJECT_REASONS, STATUS_ORDER
+from app.models import REJECT_REASONS, STATUS_ORDER, Status
 from app.pipeline.runner import Pipeline
 from app.storage import Database
 from app.timeutil import now_in
@@ -134,6 +134,8 @@ async def top_rows(
 ) -> list[Any]:
     return await db.list_jobs(
         statuses=statuses,
+        # The archive is out of the funnel unless it was asked for by name.
+        exclude_statuses=None if statuses else [Status.ARCHIVED.value],
         since_days=since_days,
         only_unnotified=only_unnotified,
         include_suspicious=include_suspicious,

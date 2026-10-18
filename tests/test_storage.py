@@ -190,6 +190,65 @@ class TestListJobs:
         assert [row["id"] for row in rows] == [fresh]
 
 
+class TestArchive:
+    """``archive_stale``: only untouched rows with a real publication date move."""
+
+    @staticmethod
+    def _ago(days: int) -> datetime:
+        return datetime.now(tz=UTC) - timedelta(days=days)
+
+    async def test_stale_new_row_is_archived_fresh_one_is_not(self, db: Database) -> None:
+        stale = await seed(db, title="DevOps old", posted_at=self._ago(120))
+        fresh = await seed(db, title="DevOps fresh", url="https://b.io/2", posted_at=self._ago(10))
+
+        moved = await db.archive_stale(days=90)
+
+        assert moved == 1
+        assert (await db.get_job(stale))["status"] == "archived"
+        assert (await db.get_job(fresh))["status"] == "new"
+
+    async def test_row_without_posted_at_is_kept(self, db: Database) -> None:
+        """Absence of a publication date is not staleness."""
+        job_id = await seed(db, title="DevOps undated")
+
+        assert await db.archive_stale(days=90) == 0
+        assert (await db.get_job(job_id))["status"] == "new"
+
+    async def test_rows_the_owner_touched_are_kept(self, db: Database) -> None:
+        starred = await seed(db, title="DevOps saved", posted_at=self._ago(200))
+        await db.set_status(starred, "saved")
+
+        assert await db.archive_stale(days=90) == 0
+        assert (await db.get_job(starred))["status"] == "saved"
+
+    async def test_days_zero_disables_the_sweep(self, db: Database) -> None:
+        await seed(db, title="DevOps old", posted_at=self._ago(400))
+
+        assert await db.archive_stale(days=0) == 0
+
+    async def test_offset_timestamps_are_parsed(self, db: Database) -> None:
+        """Sources post offsets (``-04:00``) — a string compare would get these wrong."""
+        job_id = await seed(db, title="DevOps old", posted_at=self._ago(95).replace(
+            tzinfo=datetime.now(tz=UTC).astimezone().tzinfo
+        ))
+
+        assert await db.archive_stale(days=90) == 1
+        assert (await db.get_job(job_id))["status"] == "archived"
+
+    async def test_exclude_statuses_hides_the_archive(self, db: Database) -> None:
+        stale = await seed(db, title="DevOps old", posted_at=self._ago(120))
+        fresh = await seed(db, title="DevOps fresh", url="https://b.io/2", posted_at=self._ago(1))
+        await db.archive_stale(days=90)
+
+        feed = await db.list_jobs(exclude_statuses=["archived"])
+        total = await db.count_jobs(exclude_statuses=["archived"])
+
+        assert [row["id"] for row in feed] == [fresh]
+        assert total == 1
+        # An explicit selection still reaches the archive.
+        assert [row["id"] for row in await db.list_jobs(statuses=["archived"])] == [stale]
+
+
 class TestAnalytics:
     async def test_funnel_counts(self, db: Database) -> None:
         first = await seed(db, title="DevOps A")

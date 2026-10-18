@@ -58,6 +58,7 @@ class RunSummary:
     duplicates: int = 0
     filtered: int = 0
     accepted: int = 0
+    archived: int = 0
     new_ids: list[str] = field(default_factory=list)
     alerts: list[str] = field(default_factory=list)
     llm_calls: int = 0
@@ -76,6 +77,8 @@ class RunSummary:
             f"принято {self.accepted}",
             f"новых {len(self.new_ids)}",
         ]
+        if self.archived:
+            parts.append(f"в архив {self.archived}")
         if self.llm_calls:
             parts.append(f"LLM {self.llm_calls}")
         parts.append(f"{self.seconds:.1f}s")
@@ -217,6 +220,14 @@ class Pipeline:
                 await self.db.log_event(job.id, "new", json.dumps({"sources": job.sources}))
             if job.score >= self.profile.alert_score:
                 summary.alerts.append(job.id)
+
+        # Rows already in the database can age out too (an ATS keeps a posting
+        # listed for months). The freshness filter only guards the funnel, so the
+        # archive sweep is what actually clears them out of the feed.
+        if not dry_run:
+            summary.archived = await self.db.archive_stale(
+                days=self.profile.filters.max_age_days
+            )
 
         summary.accepted = len(saved)
         summary.seconds = time.monotonic() - started
