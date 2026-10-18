@@ -50,11 +50,19 @@
     <p><strong>{{ job.llm_verdict }}</strong></p>
     <p>{{ job.llm_summary }}</p>
   </section>
+  {% elif job.teaser %}
+  <section class="panel">
+    <h2>кратко</h2>
+    <p>{{ job.teaser }}</p>
+  </section>
   {% endif %}
 
   <section class="panel">
     <h2>описание</h2>
-    <pre class="desc">{{ job.description }}</pre>
+    <details {% if not job.teaser %}open{% endif %}>
+      <summary>весь текст вакансии</summary>
+      <pre class="desc">{{ job.description }}</pre>
+    </details>
   </section>
 </article>
 {% endblock %}

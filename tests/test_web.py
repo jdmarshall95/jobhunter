@@ -148,6 +148,86 @@ async def test_archived_rows_leave_the_default_feed(db: Database, settings: Sett
 
 
 @pytest.mark.asyncio
+async def test_landing_page_is_the_new_pool(db: Database, settings: Settings) -> None:
+    """``/`` is the queue of new vacancies, so swipe mode has nothing else in it."""
+    other = make_job(
+        company="SavedCo",
+        title="staff platform engineer",
+        url="https://t.me/hrlunapark/77",
+        score=77,
+    )
+    await db.upsert_job(other)
+    await db.set_status(other.id, "saved")
+
+    app = create_web_app(db=db, settings=settings)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        page = await client.get("/")
+        assert "founding full-stack engineer" in page.text
+        assert "staff platform engineer" not in page.text
+        assert 'data-swipe="true"' in page.text
+        # Pool rows keep ★ / ✕ only — ✓ lives on the vacancy card.
+        assert 'name="status" value="applied"' not in page.text
+        assert 'name="status" value="saved"' in page.text
+
+        # ``status=`` from the filter form is the explicit "everything" view.
+        everything = await client.get("/", params={"status": ""})
+        assert "staff platform engineer" in everything.text
+        assert 'data-swipe="false"' in everything.text
+
+
+@pytest.mark.asyncio
+async def test_status_endpoint_answers_json_to_fetch(db: Database, settings: Settings) -> None:
+    """``fetch()`` gets JSON with fresh funnel counts; a plain form still gets 303."""
+    app = create_web_app(db=db, settings=settings)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        job_id = (await client.get("/api/jobs")).json()["items"][0]["id"]
+
+        resp = await client.post(
+            f"/jobs/{job_id}/status",
+            data={"status": "ignored", "reason": "other"},
+            headers={"Accept": "application/json"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["ok"] is True
+        assert body["status"] == "ignored"
+        assert body["funnel"]["ignored"] == 1
+        assert body["funnel"].get("new", 0) == 0
+
+        redirect = await client.post(
+            f"/jobs/{job_id}/status",
+            data={"status": "new", "next": "/?page=1"},
+            follow_redirects=False,
+        )
+        assert redirect.status_code == 303
+        assert redirect.headers["location"] == "/?page=1"
+
+
+@pytest.mark.asyncio
+async def test_feed_row_carries_a_short_teaser(db: Database, settings: Settings) -> None:
+    """Rows show a 3–4 sentence digest, never the whole description."""
+    long_text = "First sentence. " + "Second sentence with a lot of detail. " * 30
+    job = make_job(
+        company="TeaserCo",
+        title="senior sre",
+        url="https://t.me/hrlunapark/88",
+        description=long_text,
+    )
+    await db.upsert_job(job)
+
+    app = create_web_app(db=db, settings=settings)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        page = await client.get("/")
+        assert "First sentence." in page.text
+        assert "senior sre" in page.text
+        # The full wall of text must not leak into the feed.
+        assert page.text.count("Second sentence with a lot of detail.") < 30
+
+
+@pytest.mark.asyncio
 async def test_dismissed_row_leaves_the_default_feed(db: Database, settings: Settings) -> None:
     """``✕`` must make the row disappear on reload, not just relabel it.
 

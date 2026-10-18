@@ -228,6 +228,41 @@ button, input, select {
   gap: 0.35rem;
   align-items: center;
 }
+.row-teaser {
+  margin: 0.45rem 0 0;
+  color: #b6c3d6;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Swipe pool (the new-vacancy queue): the row is the card, ★ / ✕ are the only actions. */
+.swipe-hint {
+  margin: 0 0 0.35rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.feed.is-swipe .row {
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+}
+.feed.is-swipe .row-actions {
+  justify-content: flex-end;
+}
+.feed.is-swipe .row-actions button {
+  min-width: 6rem;
+  padding: 0.7rem 1.1rem;
+  font-weight: 700;
+}
+.feed.is-swipe .row-actions button:hover {
+  background: rgba(214, 255, 63, 0.1);
+}
+.feed.is-swipe .row-actions .danger:hover {
+  background: rgba(255, 107, 107, 0.12);
+}
 .muted { opacity: 0.8; }
 .chip {
   display: inline-flex;

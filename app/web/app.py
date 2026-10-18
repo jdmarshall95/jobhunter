@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import contextlib
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
 from urllib.parse import urlencode, urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BeforeValidator
@@ -65,6 +66,31 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
             with contextlib.suppress(json.JSONDecodeError):
                 data[key] = json.loads(raw)
     return data
+
+
+#: Sentence boundary for :func:`_teaser`. Lookbehind keeps the punctuation mark.
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
+_MULTI_WS = re.compile(r"\s+")
+
+
+def _teaser(row: dict[str, Any], *, sentences: int = 3, limit: int = 280) -> str:
+    """Short 3–4 sentence digest for the feed row and the vacancy card.
+
+    Prefers the LLM summary when the scorer produced one, otherwise trims the raw
+    description down to whole sentences. Long descriptions are what make the feed
+    unreadable, so the row shows this instead of the full text.
+    """
+    source = str(row.get("llm_summary") or "").strip() or str(row.get("description") or "")
+    text = _MULTI_WS.sub(" ", source).strip()
+    if not text:
+        return ""
+    parts = _SENTENCE_SPLIT.split(text)
+    out = " ".join(parts[:sentences]).strip()
+    if len(out) > limit:
+        out = out[:limit].rsplit(" ", 1)[0].rstrip(" ,;:-")
+    if out != text:
+        out = out.rstrip(" ,;:-") + "…"
+    return out
 
 
 def _salary_text(row: dict[str, Any]) -> str:
@@ -226,6 +252,14 @@ def create_web_app(
         page: int = Query(default=1, ge=1),
         db_: Database = Depends(require_db),
     ) -> HTMLResponse:
+        """Landing page = the pool of new vacancies (swipe mode).
+
+        ``status`` absent means "the pool", so the first screen is the queue you
+        work through. The filter form's «все» submits ``status=``, which is kept as
+        the explicit unfiltered view.
+        """
+        if status is None:
+            status = Status.NEW.value
         limit = 40
         offset = (page - 1) * limit
         statuses = [status] if status else None
@@ -254,6 +288,7 @@ def create_web_app(
             item = _row_to_dict(row)
             item["salary_text"] = _salary_text(item)
             item["channel"] = _channel_of(item)
+            item["teaser"] = _teaser(item)
             jobs.append(item)
         return TEMPLATES.TemplateResponse(
             request,
@@ -288,6 +323,7 @@ def create_web_app(
         job = _row_to_dict(row)
         job["salary_text"] = _salary_text(job)
         job["channel"] = _channel_of(job)
+        job["teaser"] = _teaser(job, sentences=4, limit=520)
         return TEMPLATES.TemplateResponse(
             request,
             "job.html",
@@ -307,13 +343,24 @@ def create_web_app(
         reason: str = Form(""),
         next: str = Form("/"),
         db_: Database = Depends(require_db),
-    ) -> RedirectResponse:
+    ) -> Response:
+        """Change a status; answer with JSON when the caller is ``fetch()``.
+
+        The feed posts via ``fetch()`` so a single row can animate out instead of
+        the whole page reloading. Plain form posts (vacancy card, no-JS) still get
+        the 303 redirect.
+        """
         if status not in {s.value for s in STATUS_ORDER}:
             raise HTTPException(400, "bad status")
         ok = await db_.set_status(job_id, status, reason=reason)
         if not ok:
             raise HTTPException(404, "job not found")
         await db_.log_event(job_id, "web_status", f"{status}:{reason}")
+
+        wants_json = "application/json" in request.headers.get("accept", "")
+        if wants_json:
+            funnel = await db_.funnel_counts()
+            return JSONResponse({"ok": True, "id": job_id, "status": status, "funnel": funnel})
         return RedirectResponse(
             _redirect_target(next, request, job_id),
             status_code=303,

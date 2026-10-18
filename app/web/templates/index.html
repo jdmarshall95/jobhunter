@@ -11,6 +11,7 @@
     {% for st in statuses %}
       {% set n = funnel.get(st.value, 0) %}
       <a class="funnel-cell{% if filters.status == st.value %} is-active{% endif %}"
+         data-status="{{ st.value }}"
          href="/?status={{ st.value }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.channel %}&channel={{ filters.channel }}{% endif %}">
         <span class="funnel-n">{{ n }}</span>
         <span class="funnel-l">{{ status_labels[st.value] }}</span>
@@ -46,12 +47,17 @@
 
 <p class="meta">{{ total }} вакансий · страница {{ filters.page }} / {{ pages }}</p>
 
-<section class="feed" aria-label="лента вакансий">
+<section class="feed{% if filters.status == 'new' %} is-swipe{% endif %}"
+         data-swipe="{{ 'true' if filters.status == 'new' else 'false' }}"
+         aria-label="лента вакансий">
+  {% if filters.status == 'new' and jobs %}
+    <p class="swipe-hint">разбор пула новых: ★ — в закладки, ✕ — мимо. Клавиши <span class="mono">S</span> / <span class="mono">X</span>, строка уходит без перезагрузки.</p>
+  {% endif %}
   {% if not jobs %}
     <p class="empty">Пусто. Запустите сбор или ослабьте фильтр.</p>
   {% endif %}
   {% for job in jobs %}
-    <article class="row" data-id="{{ job.id }}">
+    <article class="row" data-id="{{ job.id }}" data-status="{{ job.status }}">
       <a class="row-main" href="/jobs/{{ job.id }}">
         <div class="score" data-score="{{ '%.0f'|format(job.score) }}">{{ '%.0f'|format(job.score) }}</div>
         <div class="row-body">
@@ -64,6 +70,7 @@
             <span>·</span>
             <span class="muted">{{ job.status }}</span>
           </p>
+          {% if job.teaser %}<p class="row-teaser">{{ job.teaser }}</p>{% endif %}
         </div>
       </a>
       <div class="row-actions">
@@ -73,11 +80,13 @@
           <input type="hidden" name="next" value="{{ return_here }}">
           <button type="submit">★</button>
         </form>
+        {% if filters.status != 'new' %}
         <form method="post" action="/jobs/{{ job.id }}/status">
           <input type="hidden" name="status" value="applied">
           <input type="hidden" name="next" value="{{ return_here }}">
           <button type="submit">✓</button>
         </form>
+        {% endif %}
         <form method="post" action="/jobs/{{ job.id }}/status">
           <input type="hidden" name="status" value="ignored">
           <input type="hidden" name="reason" value="other">
@@ -90,12 +99,13 @@
 </section>
 
 {% if pages > 1 %}
+{# ``status`` is always carried so page 2 of «все» does not fall back to the pool. #}
 <nav class="pager">
   {% if filters.page > 1 %}
-    <a href="/?page={{ filters.page - 1 }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.channel %}&channel={{ filters.channel }}{% endif %}{% if filters.min_score != '' %}&min_score={{ filters.min_score }}{% endif %}">← назад</a>
+    <a href="/?status={{ filters.status }}&page={{ filters.page - 1 }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.channel %}&channel={{ filters.channel }}{% endif %}{% if filters.min_score != '' %}&min_score={{ filters.min_score }}{% endif %}">← назад</a>
   {% endif %}
   {% if filters.page < pages %}
-    <a href="/?page={{ filters.page + 1 }}{% if filters.status %}&status={{ filters.status }}{% endif %}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.channel %}&channel={{ filters.channel }}{% endif %}{% if filters.min_score != '' %}&min_score={{ filters.min_score }}{% endif %}">дальше →</a>
+    <a href="/?status={{ filters.status }}&page={{ filters.page + 1 }}{% if filters.q %}&q={{ filters.q }}{% endif %}{% if filters.channel %}&channel={{ filters.channel }}{% endif %}{% if filters.min_score != '' %}&min_score={{ filters.min_score }}{% endif %}">дальше →</a>
   {% endif %}
 </nav>
 {% endif %}
