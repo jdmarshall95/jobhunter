@@ -7,7 +7,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 from typing import Annotated, Any
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
@@ -48,7 +48,11 @@ STATUS_LABELS = {
     Status.OFFER.value: "оффер",
     Status.REJECTED.value: "отказ",
     Status.IGNORED.value: "не интересно",
+    Status.ARCHIVED.value: "архив",
 }
+
+#: The default feed hides the archive unless the user asks for it explicitly.
+FEED_EXCLUDED = [Status.ARCHIVED.value]
 
 
 def _row_to_dict(row: Any) -> dict[str, Any]:
@@ -79,6 +83,34 @@ def _channel_of(row: dict[str, Any]) -> str:
     if isinstance(raw, dict):
         return str(raw.get("channel") or "")
     return ""
+
+
+def _here(request: Request) -> str:
+    """Relative URL of the current page — the value a form posts as ``next``."""
+    parts = urlsplit(str(request.url))
+    return f"{parts.path}?{parts.query}" if parts.query else (parts.path or "/")
+
+
+def _redirect_target(value: str, request: Request, job_id: str) -> str:
+    """Turn the ``next`` a form posted into a same-site relative URL.
+
+    The feed posts ``request.url`` — an *absolute* URL, port included. The old
+    check (``startswith("/")``) rejected it, so ★/✓/✕ always bounced to the
+    vacancy card and the list looked like it did nothing.
+    """
+    target = (value or "").strip()
+    if not target:
+        return f"/jobs/{job_id}"
+    if target.startswith("/"):
+        return target
+    parts = urlsplit(target)
+    # Off-site target: stay inside the app instead of following it blindly.
+    # The hostname is the comparison, not the netloc — the browser may spell the
+    # same origin with an explicit port (``host`` vs ``host:80``).
+    if parts.netloc and parts.hostname != request.url.hostname:
+        return f"/jobs/{job_id}"
+    path = parts.path or "/"
+    return f"{path}?{parts.query}" if parts.query else path
 
 
 class TokenAuthMiddleware(BaseHTTPMiddleware):
@@ -195,8 +227,10 @@ def create_web_app(
         limit = 40
         offset = (page - 1) * limit
         statuses = [status] if status else None
+        excluded = None if statuses else FEED_EXCLUDED
         rows = await db_.list_jobs(
             statuses=statuses,
+            exclude_statuses=excluded,
             min_score=min_score,
             q=q,
             source=source,
@@ -205,7 +239,12 @@ def create_web_app(
             offset=offset,
         )
         total = await db_.count_jobs(
-            statuses=statuses, min_score=min_score, q=q, source=source, channel=channel
+            statuses=statuses,
+            exclude_statuses=excluded,
+            min_score=min_score,
+            q=q,
+            source=source,
+            channel=channel,
         )
         funnel = await db_.funnel_counts()
         jobs = []
@@ -232,6 +271,7 @@ def create_web_app(
                 },
                 "total": total,
                 "pages": max(1, (total + limit - 1) // limit),
+                "return_here": _here(request),
                 "reject_reasons": REJECT_REASONS,
             },
         )
@@ -260,6 +300,7 @@ def create_web_app(
     @app.post("/jobs/{job_id}/status")
     async def set_status(
         job_id: str,
+        request: Request,
         status: str = Form(...),
         reason: str = Form(""),
         next: str = Form("/"),
@@ -271,10 +312,10 @@ def create_web_app(
         if not ok:
             raise HTTPException(404, "job not found")
         await db_.log_event(job_id, "web_status", f"{status}:{reason}")
-        target = next or f"/jobs/{job_id}"
-        if not target.startswith("/"):
-            target = f"/jobs/{job_id}"
-        return RedirectResponse(target, status_code=303)
+        return RedirectResponse(
+            _redirect_target(next, request, job_id),
+            status_code=303,
+        )
 
     @app.get("/api/jobs")
     async def api_jobs(
@@ -288,8 +329,10 @@ def create_web_app(
         db_: Database = Depends(require_db),
     ) -> dict[str, Any]:
         statuses = [status] if status else None
+        excluded = None if statuses else FEED_EXCLUDED
         rows = await db_.list_jobs(
             statuses=statuses,
+            exclude_statuses=excluded,
             min_score=min_score,
             q=q,
             source=source,
@@ -298,7 +341,12 @@ def create_web_app(
             offset=offset,
         )
         total = await db_.count_jobs(
-            statuses=statuses, min_score=min_score, q=q, source=source, channel=channel
+            statuses=statuses,
+            exclude_statuses=excluded,
+            min_score=min_score,
+            q=q,
+            source=source,
+            channel=channel,
         )
         return {"total": total, "items": [_row_to_dict(r) for r in rows]}
 

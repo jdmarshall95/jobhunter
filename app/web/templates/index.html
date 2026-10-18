@@ -70,18 +70,18 @@
         <a class="ghost" href="{{ job.url }}" target="_blank" rel="noopener">открыть</a>
         <form method="post" action="/jobs/{{ job.id }}/status">
           <input type="hidden" name="status" value="saved">
-          <input type="hidden" name="next" value="{{ request.url }}">
+          <input type="hidden" name="next" value="{{ return_here }}">
           <button type="submit">★</button>
         </form>
         <form method="post" action="/jobs/{{ job.id }}/status">
           <input type="hidden" name="status" value="applied">
-          <input type="hidden" name="next" value="{{ request.url }}">
+          <input type="hidden" name="next" value="{{ return_here }}">
           <button type="submit">✓</button>
         </form>
         <form method="post" action="/jobs/{{ job.id }}/status">
           <input type="hidden" name="status" value="ignored">
           <input type="hidden" name="reason" value="other">
-          <input type="hidden" name="next" value="{{ request.url }}">
+          <input type="hidden" name="next" value="{{ return_here }}">
           <button type="submit" class="danger">✕</button>
         </form>
       </div>

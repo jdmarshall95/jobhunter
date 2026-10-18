@@ -84,6 +84,70 @@ async def test_channel_filter_and_status_change(db: Database, settings: Settings
 
 
 @pytest.mark.asyncio
+async def test_feed_buttons_return_to_the_feed(db: Database, settings: Settings) -> None:
+    """★/✓/✕ post an absolute ``next`` — the redirect must stay on the feed.
+
+    Regression: the old handler only accepted targets starting with ``/``, so
+    every button bounced to the vacancy card and the list looked dead.
+    """
+    app = create_web_app(db=db, settings=settings)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        page = await client.get("/", params={"page": 1, "q": ""})
+        assert page.status_code == 200
+        # The form must post a *relative* target, never an off-site one.
+        assert 'name="next" value="/?' in page.text
+
+        job_id = (await client.get("/api/jobs")).json()["items"][0]["id"]
+        resp = await client.post(
+            f"/jobs/{job_id}/status",
+            data={"status": "ignored", "reason": "other", "next": "http://test:80/?page=1&q="},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 303
+        assert resp.headers["location"] == "/?page=1&q="
+        assert (await db.get_job(job_id))["status"] == "ignored"
+
+        off_site = await client.post(
+            f"/jobs/{job_id}/status",
+            data={"status": "saved", "next": "https://evil.example/x"},
+            follow_redirects=False,
+        )
+        assert off_site.headers["location"] == f"/jobs/{job_id}"
+
+
+@pytest.mark.asyncio
+async def test_archived_rows_leave_the_default_feed(db: Database, settings: Settings) -> None:
+    """The feed hides the archive; ``?status=archived`` still reaches it."""
+    from datetime import UTC, datetime, timedelta
+
+    stale = make_job(
+        company="OldCo",
+        title="legacy platform engineer",
+        url="https://t.me/hrlunapark/9",
+        score=60,
+        posted_at=datetime.now(tz=UTC) - timedelta(days=200),
+    )
+    await db.upsert_job(stale)
+
+    app = create_web_app(db=db, settings=settings)
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        assert (await db.archive_stale(days=90)) == 1
+
+        page = await client.get("/")
+        assert "legacy platform engineer" not in page.text
+        assert "founding full-stack engineer" in page.text
+
+        api = await client.get("/api/jobs")
+        assert api.json()["total"] == 1
+
+        in_archive = await client.get("/", params={"status": "archived"})
+        assert "legacy platform engineer" in in_archive.text
+        assert "founding full-stack engineer" not in in_archive.text
+
+
+@pytest.mark.asyncio
 async def test_web_token_gate(db: Database, tmp_path: object) -> None:
     settings = Settings(
         telegram_enabled=False,
